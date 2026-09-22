@@ -28,7 +28,7 @@ jobs:
       - name: Run fetcher
         env:
           ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
-        run: python fetcher.py
+        run: python collector.py
 
       - name: Commit & Push dati aggiornati
         run: |
