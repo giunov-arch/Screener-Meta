@@ -1,16 +1,842 @@
 [
-  { "ticker": "ENI.MI", "nome": "Eni", "settore": "Energia", "f": { "mcap": 47, "pe": 9.8, "pb": 0.95, "evEbitda": 3.2, "roe": 9.8, "margine": 12, "debtEquity": 0.55, "divYield": 7.0, "payout": 62, "crescitaRic": -3, "crescitaEps": -8, "fcfYield": 13 } },
-  { "ticker": "ENEL.MI", "nome": "Enel", "settore": "Utility", "f": { "mcap": 80, "pe": 11.4, "pb": 1.9, "evEbitda": 6.5, "roe": 17.5, "margine": 18, "debtEquity": 1.55, "divYield": 6.0, "payout": 68, "crescitaRic": -1.5, "crescitaEps": 6, "fcfYield": 8.5 } },
-  { "ticker": "ISP.MI", "nome": "Intesa Sanpaolo", "settore": "Banche", "f": { "mcap": 82, "pe": 8.6, "pb": 1.25, "roe": 15.2, "margine": 55, "divYield": 8.1, "payout": 70, "crescitaRic": 4.5, "crescitaEps": 9, "cet1": 13.9, "fcfYield": 11 } },
-  { "ticker": "UCG.MI", "nome": "UniCredit", "settore": "Banche", "f": { "mcap": 86, "pe": 9.1, "pb": 1.15, "roe": 14.1, "margine": 54, "divYield": 6.4, "payout": 55, "crescitaRic": 5.2, "crescitaEps": 12, "cet1": 16.1, "fcfYield": 12 } },
-  { "ticker": "STLAM.MI", "nome": "Stellantis", "settore": "Auto", "f": { "mcap": 24, "pe": 6.2, "pb": 0.4, "evEbitda": 1.9, "roe": 6.5, "margine": 4.5, "debtEquity": 0.35, "divYield": 5.0, "payout": 30, "crescitaRic": -12, "crescitaEps": -45, "fcfYield": 14 } },
-  { "ticker": "RACE.MI", "nome": "Ferrari", "settore": "Lusso", "f": { "mcap": 71, "pe": 46, "pb": 22, "evEbitda": 26, "roe": 44, "margine": 28, "debtEquity": 0.85, "divYield": 0.7, "payout": 32, "crescitaRic": 12, "crescitaEps": 18, "fcfYield": 2.2 } },
-  { "ticker": "MONC.MI", "nome": "Moncler", "settore": "Lusso", "f": { "mcap": 13.8, "pe": 22, "pb": 3.6, "evEbitda": 10.5, "roe": 17.5, "margine": 27, "debtEquity": 0.25, "divYield": 2.4, "payout": 52, "crescitaRic": 2, "crescitaEps": 1, "fcfYield": 5.8 } },
-  { "ticker": "PRY.MI", "nome": "Prysmian", "settore": "Industria", "f": { "mcap": 40, "pe": 25.1, "pb": 5.7, "evEbitda": 14.9, "roe": 22, "margine": 10, "debtEquity": 0.33, "divYield": 0.7, "payout": 18, "crescitaRic": 10, "crescitaEps": 22, "fcfYield": 4.2 } },
-  { "ticker": "TIT.MI", "nome": "TIM", "settore": "Telecom", "f": { "mcap": 7.6, "pe": 18, "pb": 0.9, "evEbitda": 4.8, "roe": 3.0, "margine": 11, "debtEquity": 1.6, "divYield": 0, "payout": 0, "crescitaRic": 2, "crescitaEps": 30, "fcfYield": 9 } },
-  { "ticker": "G.MI", "nome": "Generali", "settore": "Assicurazioni", "f": { "mcap": 46, "pe": 11.2, "pb": 1.6, "roe": 14.0, "margine": 9, "divYield": 5.3, "payout": 62, "crescitaRic": 6, "crescitaEps": 8, "fcfYield": 9 } },
-  { "ticker": "TEN.MI", "nome": "Tenaris", "settore": "Energia", "f": { "mcap": 19, "pe": 9.5, "pb": 1.1, "evEbitda": 4.5, "roe": 12, "margine": 20, "debtEquity": 0.05, "divYield": 5.0, "payout": 45, "crescitaRic": -14, "crescitaEps": -30, "fcfYield": 11 } },
-  { "ticker": "REC.MI", "nome": "Recordati", "settore": "Farmaceutica", "f": { "mcap": 11.7, "pe": 22, "pb": 4.6, "evEbitda": 14, "roe": 22, "margine": 32, "debtEquity": 0.75, "divYield": 2.4, "payout": 52, "crescitaRic": 9, "crescitaEps": 12, "fcfYield": 4.8 } },
-  { "ticker": "CPR.MI", "nome": "Campari", "settore": "Beni di consumo", "f": { "mcap": 7.3, "pe": 24, "pb": 2.4, "evEbitda": 15, "roe": 10, "margine": 19, "debtEquity": 1.1, "divYield": 1.1, "payout": 27, "crescitaRic": 3, "crescitaEps": -6, "fcfYield": 3.5 } },
-  { "ticker": "STMPA.MI", "nome": "STMicroelectronics", "settore": "Tecnologia", "f": { "mcap": 21, "pe": 18, "pb": 2.2, "evEbitda": 9, "roe": 12, "margine": 15, "debtEquity": 0.2, "divYield": 1.8, "payout": 30, "crescitaRic": -5, "crescitaEps": -10, "fcfYield": 3 } }
+  {
+    "ticker": "ENI.MI",
+    "nome": "Eni",
+    "settore": "Energy",
+    "f": {
+      "mcap": 47.5,
+      "pe": 8.2,
+      "pb": 0.85,
+      "evEbitda": 3.1,
+      "roe": 11.5,
+      "margine": 8.2,
+      "debtEquity": 0.42,
+      "divYield": 6.5,
+      "payout": 35.0,
+      "crescitaRic": 2.1,
+      "crescitaEps": 5.5,
+      "fcfYield": 12.0,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "ENEL.MI",
+    "nome": "Enel",
+    "settore": "Utilities",
+    "f": {
+      "mcap": 68.0,
+      "pe": 11.5,
+      "pb": 1.75,
+      "evEbitda": 7.2,
+      "roe": 14.8,
+      "margine": 12.5,
+      "debtEquity": 1.25,
+      "divYield": 5.8,
+      "payout": 70.0,
+      "crescitaRic": 3.2,
+      "crescitaEps": 6.0,
+      "fcfYield": 6.5,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "ISP.MI",
+    "nome": "Intesa Sanpaolo",
+    "settore": "Banche",
+    "f": {
+      "mcap": 62.0,
+      "pe": 7.8,
+      "pb": 0.95,
+      "evEbitda": null,
+      "roe": 13.2,
+      "margine": 45.0,
+      "debtEquity": null,
+      "divYield": 7.2,
+      "payout": 70.0,
+      "crescitaRic": 4.5,
+      "crescitaEps": 8.5,
+      "fcfYield": 11.0,
+      "cet1": 13.8
+    }
+  },
+  {
+    "ticker": "UCG.MI",
+    "nome": "UniCredit",
+    "settore": "Banche",
+    "f": {
+      "mcap": 58.0,
+      "pe": 6.9,
+      "pb": 0.72,
+      "evEbitda": null,
+      "roe": 14.5,
+      "margine": 48.0,
+      "debtEquity": null,
+      "divYield": 6.8,
+      "payout": 65.0,
+      "crescitaRic": 3.8,
+      "crescitaEps": 12.0,
+      "fcfYield": 12.5,
+      "cet1": 16.1
+    }
+  },
+  {
+    "ticker": "G.MI",
+    "nome": "Generali",
+    "settore": "Assicurazioni",
+    "f": {
+      "mcap": 32.0,
+      "pe": 9.5,
+      "pb": 1.1,
+      "evEbitda": null,
+      "roe": 11.0,
+      "margine": 8.5,
+      "debtEquity": null,
+      "divYield": 5.5,
+      "payout": 60.0,
+      "crescitaRic": 4.0,
+      "crescitaEps": 5.0,
+      "fcfYield": 8.0,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "STM.MI",
+    "nome": "STMicroelectronics",
+    "settore": "Tecnologia",
+    "f": {
+      "mcap": 24.0,
+      "pe": 16.5,
+      "pb": 2.2,
+      "evEbitda": 5.8,
+      "roe": 18.5,
+      "margine": 22.0,
+      "debtEquity": 0.15,
+      "divYield": 1.2,
+      "payout": 25.0,
+      "crescitaRic": 2.5,
+      "crescitaEps": 3.0,
+      "fcfYield": 5.5,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "RACE.MI",
+    "nome": "Ferrari",
+    "settore": "Auto Luxury",
+    "f": {
+      "mcap": 70.0,
+      "pe": 42.0,
+      "pb": 14.5,
+      "evEbitda": 22.0,
+      "roe": 38.0,
+      "margine": 24.5,
+      "debtEquity": 0.55,
+      "divYield": 0.7,
+      "payout": 35.0,
+      "crescitaRic": 12.0,
+      "crescitaEps": 14.0,
+      "fcfYield": 2.5,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "LDO.MI",
+    "nome": "Leonardo",
+    "settore": "Difesa",
+    "f": {
+      "mcap": 12.5,
+      "pe": 14.2,
+      "pb": 1.4,
+      "evEbitda": 6.5,
+      "roe": 9.5,
+      "margine": 6.8,
+      "debtEquity": 0.65,
+      "divYield": 1.8,
+      "payout": 30.0,
+      "crescitaRic": 6.5,
+      "crescitaEps": 15.0,
+      "fcfYield": 7.0,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "PRY.MI",
+    "nome": "Prysmian",
+    "settore": "Industriali",
+    "f": {
+      "mcap": 14.0,
+      "pe": 18.0,
+      "pb": 3.2,
+      "evEbitda": 8.5,
+      "roe": 18.0,
+      "margine": 6.5,
+      "debtEquity": 0.75,
+      "divYield": 2.5,
+      "payout": 40.0,
+      "crescitaRic": 8.0,
+      "crescitaEps": 10.0,
+      "fcfYield": 5.0,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "SRG.MI",
+    "nome": "Snam",
+    "settore": "Utilities",
+    "f": {
+      "mcap": 15.0,
+      "pe": 13.5,
+      "pb": 1.5,
+      "evEbitda": 9.5,
+      "roe": 11.0,
+      "margine": 35.0,
+      "debtEquity": 1.1,
+      "divYield": 5.2,
+      "payout": 75.0,
+      "crescitaRic": 2.0,
+      "crescitaEps": 2.5,
+      "fcfYield": 4.5,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "TRN.MI",
+    "nome": "Terna",
+    "settore": "Utilities",
+    "f": {
+      "mcap": 14.5,
+      "pe": 18.5,
+      "pb": 2.8,
+      "evEbitda": 10.2,
+      "roe": 15.5,
+      "margine": 30.0,
+      "debtEquity": 1.3,
+      "divYield": 4.2,
+      "payout": 75.0,
+      "crescitaRic": 4.5,
+      "crescitaEps": 5.0,
+      "fcfYield": 3.5,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "PST.MI",
+    "nome": "Poste Italiane",
+    "settore": "Servizi",
+    "f": {
+      "mcap": 14.0,
+      "pe": 9.8,
+      "pb": 1.3,
+      "evEbitda": null,
+      "roe": 13.5,
+      "margine": 10.5,
+      "debtEquity": null,
+      "divYield": 6.0,
+      "payout": 65.0,
+      "crescitaRic": 3.0,
+      "crescitaEps": 6.0,
+      "fcfYield": 9.0,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "GASI.MI",
+    "nome": "Generali Ass",
+    "settore": "Assicurazioni",
+    "f": {
+      "mcap": 32.0,
+      "pe": 9.5,
+      "pb": 1.1,
+      "evEbitda": null,
+      "roe": 11.0,
+      "margine": 8.5,
+      "debtEquity": null,
+      "divYield": 5.5,
+      "payout": 60.0,
+      "crescitaRic": 4.0,
+      "crescitaEps": 5.0,
+      "fcfYield": 8.0,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "MB.MI",
+    "nome": "Mediobanca",
+    "settore": "Banche",
+    "f": {
+      "mcap": 11.0,
+      "pe": 8.5,
+      "pb": 0.85,
+      "evEbitda": null,
+      "roe": 11.5,
+      "margine": 35.0,
+      "debtEquity": null,
+      "divYield": 6.2,
+      "payout": 70.0,
+      "crescitaRic": 5.0,
+      "crescitaEps": 7.0,
+      "fcfYield": 10.0,
+      "cet1": 15.2
+    }
+  },
+  {
+    "ticker": "NEXI.MI",
+    "nome": "Nexi",
+    "settore": "Tecnologia",
+    "f": {
+      "mcap": 6.5,
+      "pe": 22.0,
+      "pb": 0.8,
+      "evEbitda": 8.0,
+      "roe": 3.5,
+      "margine": 12.0,
+      "debtEquity": 1.4,
+      "divYield": 0.0,
+      "payout": 0.0,
+      "crescitaRic": 7.0,
+      "crescitaEps": 15.0,
+      "fcfYield": 8.5,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "CPR.MI",
+    "nome": "Campari",
+    "settore": "Consumer",
+    "f": {
+      "mcap": 9.5,
+      "pe": 28.0,
+      "pb": 4.5,
+      "evEbitda": 18.0,
+      "roe": 15.0,
+      "margine": 15.0,
+      "debtEquity": 0.6,
+      "divYield": 1.0,
+      "payout": 30.0,
+      "crescitaRic": 8.5,
+      "crescitaEps": 9.0,
+      "fcfYield": 2.8,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "BC.MI",
+    "nome": "Brunello Cucinelli",
+    "settore": "Lusso",
+    "f": {
+      "mcap": 5.8,
+      "pe": 52.0,
+      "pb": 10.5,
+      "evEbitda": 24.0,
+      "roe": 20.0,
+      "margine": 18.0,
+      "debtEquity": 0.3,
+      "divYield": 0.8,
+      "payout": 40.0,
+      "crescitaRic": 18.0,
+      "crescitaEps": 20.0,
+      "fcfYield": 1.5,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "MONC.MI",
+    "nome": "Moncler",
+    "settore": "Lusso",
+    "f": {
+      "mcap": 14.5,
+      "pe": 24.0,
+      "pb": 5.5,
+      "evEbitda": 14.0,
+      "roe": 24.0,
+      "margine": 28.0,
+      "debtEquity": 0.1,
+      "divYield": 1.5,
+      "payout": 45.0,
+      "crescitaRic": 10.0,
+      "crescitaEps": 12.0,
+      "fcfYield": 3.5,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "AMP.MI",
+    "nome": "Amplifon",
+    "settore": "Healthcare",
+    "f": {
+      "mcap": 5.2,
+      "pe": 26.0,
+      "pb": 4.2,
+      "evEbitda": 12.5,
+      "roe": 16.5,
+      "margine": 12.5,
+      "debtEquity": 0.7,
+      "divYield": 0.9,
+      "payout": 35.0,
+      "crescitaRic": 7.5,
+      "crescitaEps": 10.0,
+      "fcfYield": 3.0,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "BREM.MI",
+    "nome": "Brembo",
+    "settore": "Industriali",
+    "f": {
+      "mcap": 3.2,
+      "pe": 12.5,
+      "pb": 1.8,
+      "evEbitda": 5.5,
+      "roe": 14.5,
+      "margine": 8.5,
+      "debtEquity": 0.35,
+      "divYield": 3.2,
+      "payout": 40.0,
+      "crescitaRic": 4.5,
+      "crescitaEps": 6.0,
+      "fcfYield": 6.5,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "BZU.MI",
+    "nome": "Buzzi Unicem",
+    "settore": "Materiali",
+    "f": {
+      "mcap": 5.5,
+      "pe": 9.0,
+      "pb": 0.9,
+      "evEbitda": 4.2,
+      "roe": 10.5,
+      "margine": 15.0,
+      "debtEquity": 0.2,
+      "divYield": 3.8,
+      "payout": 35.0,
+      "crescitaRic": 3.5,
+      "crescitaEps": 5.0,
+      "fcfYield": 9.0,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "IP.MI",
+    "nome": "Interpump",
+    "settore": "Industriali",
+    "f": {
+      "mcap": 4.2,
+      "pe": 18.5,
+      "pb": 3.0,
+      "evEbitda": 10.5,
+      "roe": 16.0,
+      "margine": 16.5,
+      "debtEquity": 0.4,
+      "divYield": 1.2,
+      "payout": 25.0,
+      "crescitaRic": 6.0,
+      "crescitaEps": 8.0,
+      "fcfYield": 4.5,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "AZM.MI",
+    "nome": "Azimut",
+    "settore": "Asset Management",
+    "f": {
+      "mcap": 3.0,
+      "pe": 11.0,
+      "pb": 2.5,
+      "evEbitda": 7.0,
+      "roe": 22.0,
+      "margine": 22.0,
+      "debtEquity": 0.1,
+      "divYield": 5.5,
+      "payout": 60.0,
+      "crescitaRic": 2.5,
+      "crescitaEps": 4.0,
+      "fcfYield": 7.5,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "MED.MI",
+    "nome": "Mediolanum",
+    "settore": "Banche",
+    "f": {
+      "mcap": 8.5,
+      "pe": 12.5,
+      "pb": 1.8,
+      "evEbitda": null,
+      "roe": 14.0,
+      "margine": 25.0,
+      "debtEquity": null,
+      "divYield": 4.8,
+      "payout": 60.0,
+      "crescitaRic": 5.5,
+      "crescitaEps": 7.0,
+      "fcfYield": 8.5,
+      "cet1": 20.5
+    }
+  },
+  {
+    "ticker": "SPM.MI",
+    "nome": "Saipem",
+    "settore": "Energy",
+    "f": {
+      "mcap": 4.5,
+      "pe": 18.0,
+      "pb": 1.2,
+      "evEbitda": 5.5,
+      "roe": 6.5,
+      "margine": 3.5,
+      "debtEquity": 0.8,
+      "divYield": 0.0,
+      "payout": 0.0,
+      "crescitaRic": 15.0,
+      "crescitaEps": 45.0,
+      "fcfYield": 4.0,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "TEN.MI",
+    "nome": "Tenaris",
+    "settore": "Energy",
+    "f": {
+      "mcap": 14.0,
+      "pe": 6.5,
+      "pb": 0.85,
+      "evEbitda": 2.8,
+      "roe": 13.5,
+      "margine": 22.0,
+      "debtEquity": 0.05,
+      "divYield": 6.5,
+      "payout": 40.0,
+      "crescitaRic": -2.0,
+      "crescitaEps": -5.0,
+      "fcfYield": 14.0,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "TIT.MI",
+    "nome": "Telecom Italia",
+    "settore": "TLC",
+    "f": {
+      "mcap": 4.8,
+      "pe": null,
+      "pb": 0.4,
+      "evEbitda": 4.5,
+      "roe": -2.0,
+      "margine": -2.5,
+      "debtEquity": 1.8,
+      "divYield": 0.0,
+      "payout": 0.0,
+      "crescitaRic": -1.5,
+      "crescitaEps": null,
+      "fcfYield": 8.0,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "BPE.MI",
+    "nome": "BPER Banca",
+    "settore": "Banche",
+    "f": {
+      "mcap": 6.2,
+      "pe": 6.2,
+      "pb": 0.55,
+      "evEbitda": null,
+      "roe": 10.5,
+      "margine": 30.0,
+      "debtEquity": null,
+      "divYield": 7.5,
+      "payout": 65.0,
+      "crescitaRic": 6.0,
+      "crescitaEps": 10.0,
+      "fcfYield": 13.0,
+      "cet1": 14.5
+    }
+  },
+  {
+    "ticker": "BMPS.MI",
+    "nome": "MPS",
+    "settore": "Banche",
+    "f": {
+      "mcap": 5.5,
+      "pe": 5.8,
+      "pb": 0.48,
+      "evEbitda": null,
+      "roe": 9.5,
+      "margine": 28.0,
+      "debtEquity": null,
+      "divYield": 5.0,
+      "payout": 50.0,
+      "crescitaRic": 4.0,
+      "crescitaEps": 25.0,
+      "fcfYield": 15.0,
+      "cet1": 18.2
+    }
+  },
+  {
+    "ticker": "BAMI.MI",
+    "nome": "Banco BPM",
+    "settore": "Banche",
+    "f": {
+      "mcap": 8.8,
+      "pe": 5.5,
+      "pb": 0.58,
+      "evEbitda": null,
+      "roe": 12.5,
+      "margine": 32.0,
+      "debtEquity": null,
+      "divYield": 8.0,
+      "payout": 65.0,
+      "crescitaRic": 5.5,
+      "crescitaEps": 11.0,
+      "fcfYield": 14.0,
+      "cet1": 14.2
+    }
+  },
+  {
+    "ticker": "CNHI.MI",
+    "nome": "CNH Industrial",
+    "settore": "Industriali",
+    "f": {
+      "mcap": 12.0,
+      "pe": 7.5,
+      "pb": 1.5,
+      "evEbitda": 5.2,
+      "roe": 20.0,
+      "margine": 8.5,
+      "debtEquity": 1.5,
+      "divYield": 4.5,
+      "payout": 35.0,
+      "crescitaRic": 1.5,
+      "crescitaEps": 3.0,
+      "fcfYield": 8.5,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "STLA.MI",
+    "nome": "Stellantis",
+    "settore": "Auto",
+    "f": {
+      "mcap": 38.0,
+      "pe": 3.8,
+      "pb": 0.45,
+      "evEbitda": 1.5,
+      "roe": 12.5,
+      "margine": 6.5,
+      "debtEquity": 0.15,
+      "divYield": 9.5,
+      "payout": 35.0,
+      "crescitaRic": -5.0,
+      "crescitaEps": -10.0,
+      "fcfYield": 18.0,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "REC.MI",
+    "nome": "Recordati",
+    "settore": "Healthcare",
+    "f": {
+      "mcap": 10.5,
+      "pe": 21.0,
+      "pb": 4.2,
+      "evEbitda": 14.5,
+      "roe": 20.5,
+      "margine": 22.5,
+      "debtEquity": 0.55,
+      "divYield": 2.2,
+      "payout": 50.0,
+      "crescitaRic": 9.0,
+      "crescitaEps": 10.5,
+      "fcfYield": 4.0,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "DNLM.MI",
+    "nome": "De Nora",
+    "settore": "Industriali",
+    "f": {
+      "mcap": 2.2,
+      "pe": 28.0,
+      "pb": 1.2,
+      "evEbitda": 9.5,
+      "roe": 4.5,
+      "margine": 10.5,
+      "debtEquity": 0.1,
+      "divYield": 1.5,
+      "payout": 40.0,
+      "crescitaRic": 5.0,
+      "crescitaEps": 8.0,
+      "fcfYield": 3.5,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "DIA.MI",
+    "nome": "Diasorin",
+    "settore": "Healthcare",
+    "f": {
+      "mcap": 4.8,
+      "pe": 24.0,
+      "pb": 2.2,
+      "evEbitda": 11.5,
+      "roe": 9.0,
+      "margine": 18.5,
+      "debtEquity": 0.65,
+      "divYield": 1.2,
+      "payout": 30.0,
+      "crescitaRic": 2.0,
+      "crescitaEps": 5.0,
+      "fcfYield": 4.5,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "IG.MI",
+    "nome": "Italgas",
+    "settore": "Utilities",
+    "f": {
+      "mcap": 4.5,
+      "pe": 12.0,
+      "pb": 1.6,
+      "evEbitda": 8.8,
+      "roe": 13.5,
+      "margine": 22.0,
+      "debtEquity": 0.95,
+      "divYield": 5.5,
+      "payout": 65.0,
+      "crescitaRic": 8.0,
+      "crescitaEps": 6.0,
+      "fcfYield": 5.0,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "ITL.MI",
+    "nome": "Itinera",
+    "settore": "Industriali",
+    "f": {
+      "mcap": 0.8,
+      "pe": 15.0,
+      "pb": 0.9,
+      "evEbitda": 6.0,
+      "roe": 6.0,
+      "margine": 5.5,
+      "debtEquity": 0.8,
+      "divYield": 3.0,
+      "payout": 45.0,
+      "crescitaRic": 4.0,
+      "crescitaEps": 5.0,
+      "fcfYield": 6.0,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "HER.MI",
+    "nome": "Hera",
+    "settore": "Utilities",
+    "f": {
+      "mcap": 4.8,
+      "pe": 13.5,
+      "pb": 1.2,
+      "evEbitda": 7.2,
+      "roe": 9.0,
+      "margine": 8.5,
+      "debtEquity": 0.85,
+      "divYield": 4.8,
+      "payout": 65.0,
+      "crescitaRic": 3.5,
+      "crescitaEps": 4.0,
+      "fcfYield": 6.0,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "ERG.MI",
+    "nome": "ERG",
+    "settore": "Utilities",
+    "f": {
+      "mcap": 3.2,
+      "pe": 16.0,
+      "pb": 1.8,
+      "evEbitda": 8.5,
+      "roe": 11.5,
+      "margine": 18.0,
+      "debtEquity": 0.75,
+      "divYield": 4.0,
+      "payout": 65.0,
+      "crescitaRic": 5.0,
+      "crescitaEps": 6.5,
+      "fcfYield": 5.5,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "A2A.MI",
+    "nome": "A2A",
+    "settore": "Utilities",
+    "f": {
+      "mcap": 5.5,
+      "pe": 11.5,
+      "pb": 1.1,
+      "evEbitda": 6.5,
+      "roe": 10.0,
+      "margine": 8.0,
+      "debtEquity": 0.9,
+      "divYield": 5.2,
+      "payout": 60.0,
+      "crescitaRic": 4.5,
+      "crescitaEps": 5.5,
+      "fcfYield": 6.5,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "HOV.MI",
+    "nome": "Hovione",
+    "settore": "Industriali",
+    "f": {
+      "mcap": 1.5,
+      "pe": 18.0,
+      "pb": 2.0,
+      "evEbitda": 9.0,
+      "roe": 11.0,
+      "margine": 12.0,
+      "debtEquity": 0.3,
+      "divYield": 2.0,
+      "payout": 35.0,
+      "crescitaRic": 7.0,
+      "crescitaEps": 9.0,
+      "fcfYield": 4.0,
+      "cet1": null
+    }
+  },
+  {
+    "ticker": "CS.MI",
+    "nome": "Acsm Agam",
+    "settore": "Utilities",
+    "f": {
+      "mcap": 0.5,
+      "pe": 12.0,
+      "pb": 0.8,
+      "evEbitda": 5.5,
+      "roe": 7.0,
+      "margine": 6.5,
+      "debtEquity": 0.6,
+      "divYield": 4.5,
+      "payout": 55.0,
+      "crescitaRic": 2.5,
+      "crescitaEps": 3.0,
+      "fcfYield": 7.0,
+      "cet1": null
+    }
+  }
 ]
