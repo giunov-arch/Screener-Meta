@@ -1,167 +1,194 @@
+#!/usr/bin/env python3
 """
-Fetcher FTSE MIB / Euronext Milan - versione anti rate-limit
-Fix per YFRateLimitError
+fetcher v4 - basato su collector.py dell'utente
 
-Cambiamenti:
-- Download prezzi in BATCH unico (1 richiesta invece di 40)
-- Chunk da 15 ticker + pausa 3s tra chunk
-- Retry con backoff esponenziale
-- threads=False per non martellare Yahoo
-- Fondamentali con cache e sleep lungo
+Perché collector.py funziona meglio di fetch.py precedente:
+
+1. tk.history() vs yf.download(): history() usa endpoint chart v8 meno rate-limitato,
+   download() usa batch che Yahoo ora blocca su .MI dopo pochi ticker
+
+2. Fallback statico universo.json -> f: collector non si affida solo a Yahoo per fondamentali.
+   Se Yahoo non ritorna un campo, usa valore statico da universo.json via fondi().
+   CET1 ad esempio non esiste proprio su Yahoo, deve venire da statico.
+
+3. normalizza_percentuale(): Yahoo ritorna ROE a volte 0.152 a volte 15.2. Collector gestisce.
+
+4. leggi_barre() con check NaN robusto (x != x) e salvataggio di tutte le barre OHLCV,
+   non solo ultimo prezzo. Così l'app può disegnare grafici.
+
+5. Sicurezza MINIMO_RIUSCITI: se <50% titoli fallisce, non pubblica snapshot a metà.
+
+Questo v4 unisce:
+- logica anti-ban di collector (history, pausa 1.5s, cache static fallback)
+- output compatibile sia con Screener Italia (italian_stocks.json piatto) sia con Il Listino (snapshot.json con barre)
 """
+
+import json, time, sys, argparse
+from datetime import date
+from pathlib import Path
 import yfinance as yf
-import pandas as pd
-import numpy as np
-import json, os, time, random
-from datetime import datetime
 
-TICKERS = [
-    "ENI.MI","ENEL.MI","ISP.MI","UCG.MI","G.MI","STM.MI","RACE.MI","LDO.MI",
-    "PRY.MI","SRG.MI","TRN.MI","PST.MI","GASI.MI","MB.MI","NEXI.MI","CPR.MI",
-    "BC.MI","MONC.MI","AMP.MI","BREM.MI","BZU.MI","IP.MI","AZM.MI","MED.MI",
-    "SPM.MI","TEN.MI","TIT.MI","BPE.MI","BMPS.MI","BAMI.MI","CNHI.MI","STLA.MI",
-    "REC.MI","DNLM.MI","DIA.MI","IG.MI","ITL.MI","HER.MI","ERG.MI","A2A.MI",
-    "HOV.MI","CS.MI"
-]
+STORIA_ANNI = 2
+PAUSA_SECONDI = 2.0  # aumentato da 1.5 per GitHub Actions shared IP
+MINIMO_RIUSCITI = 0.5
+QUI = Path(__file__).parent
+UNIVERSO_PATH = QUI / "universo.json"  # se esiste, usa static fallback come collector
+OUTPUT_SNAPSHOT = QUI / "dati" / "snapshot.json"
+OUTPUT_FLAT_JSON = QUI / "data" / "italian_stocks.json"
+OUTPUT_FLAT_CSV = QUI / "data" / "italian_stocks.csv"
 
-SECTORS = {
-    "ENI.MI":"Energy","ENEL.MI":"Utilities","ISP.MI":"Financial","UCG.MI":"Financial",
-    "G.MI":"Financial","STM.MI":"Technology","RACE.MI":"Auto Luxury","LDO.MI":"Defense",
-}
+CAMPI_F = ["mcap", "pe", "pb", "evEbitda", "roe", "margine", "debtEquity", "divYield", "payout", "crescitaRic", "crescitaEps", "fcfYield", "cet1"]
 
-def compute_technical(df):
-    close = df['Close']
-    df['SMA50'] = close.rolling(50).mean()
-    df['SMA200'] = close.rolling(200).mean()
-    delta = close.diff()
-    gain = delta.where(delta>0,0).rolling(14).mean()
-    loss = (-delta.where(delta<0,0)).rolling(14).mean()
-    rs = gain / loss
-    df['RSI'] = 100 - (100/(1+rs))
-    df['Momentum3M'] = (close / close.shift(63) -1)*100
-    df['VolVsAvg'] = (df['Volume'] / df['Volume'].rolling(20).mean() -1)*100
-    return df
+def normalizza_percentuale(v):
+    if v is None: return None
+    return v * 100 if abs(v) < 1 else v
 
-def batch_download(tickers, period="2y"):
-    all_data = {}
-    # Yahoo limita, scarica a chunk
-    chunk_size = 10
-    for i in range(0, len(tickers), chunk_size):
-        chunk = tickers[i:i+chunk_size]
-        print(f"Batch {i//chunk_size+1}: {chunk}")
-        for attempt in range(4):
-            try:
-                # threads=False è fondamentale per evitare ban
-                data = yf.download(chunk, period=period, interval="1d", auto_adjust=True, progress=False, threads=False, group_by='ticker')
-                # salva
-                if len(chunk)==1:
-                    all_data[chunk[0]] = data
-                else:
-                    for t in chunk:
-                        try:
-                            if t in data.columns.get_level_values(0) or t in str(data.columns):
-                                # estrai
-                                if isinstance(data.columns, pd.MultiIndex):
-                                    all_data[t] = data[t].dropna()
-                                else:
-                                    all_data[t] = data
-                        except:
-                            pass
-                print(f"  OK {len(chunk)} tickers")
-                break
-            except Exception as e:
-                wait = (2**attempt) + random.uniform(1,3)
-                print(f"  Rate limit / errore: {e} -> retry in {wait:.1f}s")
-                time.sleep(wait)
-        time.sleep(random.uniform(2.5, 4.5))  # pausa tra chunk
-    return all_data
+def arrotonda(v, cifre=2):
+    return round(v, cifre) if v is not None else None
 
-def get_fundamentals_safe(ticker):
-    try:
-        # sleep lungo per non triggerare limit info
-        time.sleep(random.uniform(1.0, 2.0))
-        tk = yf.Ticker(ticker)
-        info = tk.info or {}
-        return {
-            "PE": info.get("trailingPE"),
-            "PB": info.get("priceToBook"),
-            "ROE": (info.get("returnOnEquity") or 0)*100 if info.get("returnOnEquity") else None,
-            "DebtEquity": info.get("debtToEquity"),
-            "DivYield": (info.get("dividendYield") or 0)*100 if info.get("dividendYield") else None,
-            "MarketCap": info.get("marketCap"),
-            "MargineNetto": (info.get("profitMargins") or 0)*100 if info.get("profitMargins") else None,
-        }
-    except Exception as e:
-        print(f"  Fund {ticker} skip: {e}")
-        return {}
+def leggi_barre(storico):
+    barre = []
+    for indice, riga in storico.iterrows():
+        o,h,l,c = riga.get("Open"), riga.get("High"), riga.get("Low"), riga.get("Close")
+        if any(x is None or x != x for x in (o,h,l,c)): continue
+        v = riga.get("Volume")
+        barre.append({
+            "d": indice.strftime("%Y-%m-%d"),
+            "o": round(float(o),4), "h": round(float(h),4),
+            "l": round(float(l),4), "c": round(float(c),4),
+            "v": int(v) if v==v and v is not None else 0,
+        })
+    return barre
+
+def leggi_fondamentali_live(info):
+    mcap_raw = info.get("marketCap")
+    mcap = (mcap_raw/1e9) if mcap_raw else None
+    pe = info.get("trailingPE") or info.get("forwardPE")
+    roe = normalizza_percentuale(info.get("returnOnEquity"))
+    margine = normalizza_percentuale(info.get("profitMargins"))
+    debt = info.get("debtToEquity")
+    debtEq = (debt/100) if debt is not None else None
+    div = normalizza_percentuale(info.get("dividendYield"))
+    payout = normalizza_percentuale(info.get("payoutRatio"))
+    crescRic = normalizza_percentuale(info.get("revenueGrowth"))
+    crescEps = normalizza_percentuale(info.get("earningsGrowth"))
+    fcf = info.get("freeCashflow")
+    fcfYield = (fcf/mcap_raw*100) if (fcf and mcap_raw) else None
+
+    grezzi = {
+        "mcap": arrotonda(mcap,2), "pe": arrotonda(pe,2),
+        "pb": arrotonda(info.get("priceToBook"),2),
+        "evEbitda": arrotonda(info.get("enterpriseToEbitda"),2),
+        "roe": arrotonda(roe,2), "margine": arrotonda(margine,2),
+        "debtEquity": arrotonda(debtEq,3),
+        "divYield": arrotonda(div,2), "payout": arrotonda(payout,2),
+        "crescitaRic": arrotonda(crescRic,2), "crescitaEps": arrotonda(crescEps,2),
+        "fcfYield": arrotonda(fcfYield,2),
+    }
+    return {k:v for k,v in grezzi.items() if v is not None}
+
+def fondi(base, live):
+    res = dict(base or {})
+    res.update(live or {})
+    return res
+
+def scarica_titolo(voce):
+    ticker = voce["ticker"]
+    tk = yf.Ticker(ticker)
+    storico = tk.history(period=f"{STORIA_ANNI}y", interval="1d")
+    if storico.empty:
+        raise RuntimeError("nessun dato storico")
+    barre = leggi_barre(storico)
+    if len(barre)<60:
+        raise RuntimeError(f"solo {len(barre)} barre")
+    info = tk.info or {}
+    fondamentali = fondi(voce.get("f"), leggi_fondamentali_live(info))
+    # consenso opzionale
+    con = None
+    tp = info.get("targetMeanPrice")
+    if tp is not None:
+        lo, hi = info.get("targetLowPrice"), info.get("targetHighPrice")
+        try:
+            trend = tk.recommendations
+            b=h=s=0
+            if trend is not None and not trend.empty:
+                riga = trend.iloc[0]
+                b = int(riga.get("strongBuy",0) or 0)+int(riga.get("buy",0) or 0)
+                h = int(riga.get("hold",0) or 0)
+                s = int(riga.get("sell",0) or 0)+int(riga.get("strongSell",0) or 0)
+            n = info.get("numberOfAnalystOpinions") or (b+h+s) or None
+            if n:
+                con = {"tp": round(tp,3), "lo": round(lo or tp,3), "hi": round(hi or tp,3), "n": int(n), "b": b, "h": h, "s": s}
+        except: pass
+    return barre, fondamentali, con
 
 def main():
-    print("Download batch prezzi...")
-    price_map = batch_download(TICKERS, period="2y")
-    results = []
-    for t in TICKERS:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--universo", default=str(UNIVERSO_PATH))
+    args = parser.parse_args()
+
+    universo_path = Path(args.universo)
+    if universo_path.exists():
+        universo = json.loads(universo_path.read_text(encoding="utf-8"))
+        print(f"Universo caricato da {universo_path}: {len(universo)} titoli con fallback statico")
+    else:
+        # fallback se universo.json non esiste: costruisci da TICKERS base
+        print("universo.json non trovato, uso lista base con f vuoti")
+        base_tickers = ["ENI.MI","ENEL.MI","ISP.MI","UCG.MI","G.MI","STM.MI","RACE.MI","LDO.MI","PRY.MI","SRG.MI","TRN.MI","PST.MI","GASI.MI","MB.MI","NEXI.MI","CPR.MI","BC.MI","MONC.MI","AMP.MI","BREM.MI","BZU.MI","IP.MI","AZM.MI","MED.MI","SPM.MI","TEN.MI","TIT.MI","BPE.MI","BMPS.MI","BAMI.MI","CNHI.MI","STLA.MI","REC.MI","DNLM.MI","DIA.MI","IG.MI","ITL.MI","HER.MI","ERG.MI","A2A.MI","HOV.MI","CS.MI"]
+        universo = [{"ticker": t, "nome": t.replace(".MI",""), "settore": "Industrials", "f": {}} for t in base_tickers]
+
+    titoli = []
+    flat = []
+    falliti = []
+
+    for voce in universo:
+        ticker = voce["ticker"]
         try:
-            df = price_map.get(t)
-            if df is None or df.empty or len(df)<200:
-                print(f"{t}: no data, skip")
-                continue
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
-            df = compute_technical(df)
-            last = df.iloc[-1]
-            price = float(last['Close'])
-            sma50 = float(last['SMA50']) if not pd.isna(last['SMA50']) else price
-            sma200 = float(last['SMA200']) if not pd.isna(last['SMA200']) else price
-            rsi = float(last['RSI']) if not pd.isna(last['RSI']) else 50
-            mom = float(last['Momentum3M']) if not pd.isna(last['Momentum3M']) else 0
-            vol = float(last['VolVsAvg']) if not pd.isna(last['VolVsAvg']) else 0
-            dist_sma200 = (price/sma200 -1)*100 if sma200 else 0
-            max52 = float(df['Close'].tail(252).max())
-            dist_52w = (price/max52 -1)*100 if max52 else 0
-
-            pattern="Neutrale"
-            if price > sma50 > sma200 and rsi>50: pattern="Golden Cross"
-            elif abs(price-sma50)/sma50 <0.02: pattern="Pullback a SMA50"
-            elif vol>80 and mom>5: pattern="Breakout volumi"
-            elif abs(mom)<3 and vol< -20: pattern="Base stretta"
-
-            print(f"Fund {t}...")
-            fund = get_fundamentals_safe(t)
-
-            item = {
-                "Ticker": t.replace(".MI",""),
-                "TickerYahoo": t,
-                "Nome": t.replace(".MI",""),
-                "Settore": SECTORS.get(t, "Industrials"),
-                "Indice": "FTSE MIB",
-                "Prezzo": round(price,2),
-                "MarketCapMld": round((fund.get("MarketCap") or 0)/1e9,2),
-                "PE": round(fund.get("PE") or 0,2) if fund.get("PE") else None,
-                "PB": round(fund.get("PB") or 0,2) if fund.get("PB") else None,
-                "ROE": round(fund.get("ROE") or 0,2) if fund.get("ROE") else None,
-                "DebtEquity": round((fund.get("DebtEquity") or 0)/100,2) if fund.get("DebtEquity") else None,
-                "DivYield": round(fund.get("DivYield") or 0,2) if fund.get("DivYield") else None,
-                "MargineNetto": round(fund.get("MargineNetto") or 0,2) if fund.get("MargineNetto") else None,
-                "RSI": round(rsi,1),
-                "SMA50": round(sma50,2),
-                "SMA200": round(sma200,2),
-                "DistSMA200": round(dist_sma200,2),
-                "Dist52w": round(dist_52w,2),
-                "Momentum3M": round(mom,2),
-                "VolVsMedia": round(vol,1),
-                "Pattern": pattern,
-            }
-            results.append(item)
+            barre, fondamentali, consenso = scarica_titolo(voce)
+            titoli.append({"ticker": ticker, "nome": voce["nome"], "settore": voce["settore"], "barre": barre, "f": fondamentali, "con": consenso})
+            # flat per Screener Italia
+            last_c = barre[-1]["c"] if barre else 0
+            # calcola tecnica da barre
+            import pandas as pd
+            closes = pd.Series([b["c"] for b in barre])
+            sma50 = closes.rolling(50).mean().iloc[-1] if len(closes)>=50 else last_c
+            sma200 = closes.rolling(200).mean().iloc[-1] if len(closes)>=200 else last_c
+            max52 = closes.tail(252).max()
+            flat.append({
+                "Ticker": ticker.replace(".MI",""), "TickerYahoo": ticker, "Nome": voce["nome"], "Settore": voce["settore"],
+                "Prezzo": last_c, "PE": fondamentali.get("pe"), "PB": fondamentali.get("pb"),
+                "ROE": fondamentali.get("roe"), "DivYield": fondamentali.get("divYield"),
+                "DebtEquity": fondamentali.get("debtEquity"), "MarketCapMld": fondamentali.get("mcap"),
+                "SMA50": round(float(sma50),2), "SMA200": round(float(sma200),2),
+                "DistSMA200": round((last_c/sma200-1)*100,2) if sma200 else 0,
+                "Dist52w": round((last_c/max52-1)*100,2) if max52 else 0,
+                "Pattern": "Golden Cross" if last_c > sma50 > sma200 else "Neutrale",
+                "BarreCount": len(barre)
+            })
+            print(f"  ok {ticker}: {len(barre)} barre, {len(fondamentali)}/13 campi")
         except Exception as e:
-            print(f"Errore {t}: {e}")
+            falliti.append(ticker)
+            print(f"  FAIL {ticker}: {e}", file=sys.stderr)
+        time.sleep(PAUSA_SECONDI)
 
-    os.makedirs("data", exist_ok=True)
-    with open("data/italian_stocks.json","w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
-    pd.DataFrame(results).to_csv("data/italian_stocks.csv", index=False)
-    with open("data/last_update.json","w") as f:
-        json.dump({"last_update": datetime.utcnow().isoformat(), "count": len(results)}, f, indent=2)
-    print(f"Fatto: {len(results)} titoli -> data/")
+    if len(titoli) < len(universo)*MINIMO_RIUSCITI:
+        print(f"Solo {len(titoli)}/{len(universo)} riusciti - sotto soglia, non scrivo", file=sys.stderr)
+        sys.exit(1)
+
+    # output 1: snapshot ricco (per Il Listino)
+    OUTPUT_SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
+    snapshot = {"generato_il": date.today().isoformat(), "titoli": titoli}
+    OUTPUT_SNAPSHOT.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
+    # output 2: flat per Screener Italia
+    OUTPUT_FLAT_JSON.parent.mkdir(parents=True, exist_ok=True)
+    OUTPUT_FLAT_JSON.write_text(json.dumps(flat, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        import pandas as pd
+        pd.DataFrame(flat).to_csv(OUTPUT_FLAT_CSV, index=False)
+    except: pass
+
+    print(f"\nScritto {OUTPUT_SNAPSHOT} e {OUTPUT_FLAT_JSON} - {len(titoli)}/{len(universo)} titoli")
+    if falliti: print(f"Falliti: {', '.join(falliti)}", file=sys.stderr)
 
 if __name__ == "__main__":
     main()
