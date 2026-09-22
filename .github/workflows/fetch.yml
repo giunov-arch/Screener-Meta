@@ -12,24 +12,30 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
       - name: Install deps
         run: pip install -r requirements.txt
-      - name: Run collector (genera dati/snapshot.json + data/italian_stocks.json)
+      - name: Run collector
         run: |
-          # usa collector.py che hai caricato - è quello che funziona
-          python collector.py || python github-screener-italia/fetcher_v4_collector_based.py
-          ls -lh dati/ || true
-          ls -lh data/ || true
-          cat dati/snapshot.json | head -20 || true
-      - name: Commit dati
+          python collector.py || python fetcher_v4_collector_based.py || python fetcher.py --no-fundamentals
+          echo "--- files ---"
+          ls -lh dati/ data/ 2>/dev/null || true
+          ls -lh *.json 2>/dev/null || true
+      - name: Commit e push con rebase
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add dati/ data/ universo.json -f || git add dati/ data/ -f
-          git status
-          git diff --staged --quiet || git commit -m "Aggiornamento dati: $(date -u +'%Y-%m-%d %H:%M UTC') - $(cat dati/snapshot.json | grep -o '"ticker"' | wc -l) titoli"
-          git push
+          git add dati/snapshot.json data/italian_stocks.json data/italian_stocks.csv universo.json -f 2>/dev/null || git add dati/ data/ -f
+          if git diff --staged --quiet; then
+            echo "Nessun cambiamento"
+            exit 0
+          fi
+          git commit -m "Aggiornamento dati: $(date -u +'%Y-%m-%d %H:%M UTC')"
+          # Fix per l'errore "fetch first" - pull con rebase prima di push
+          git pull --rebase origin main || git pull --rebase
+          git push || (git push --force-with-lease)
