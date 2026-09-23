@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="it">
-  <head><style>
+<head><style>
 @font-face {
   font-family: "Optimistic";
   font-style: normal;
@@ -22,969 +22,356 @@
   font-family: "Optimistic Mono", ui-monospace, monospace;
 }
 </style>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Screener Italia Pro - Base Finale No Proxy</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-    <style>
-      html, body { font-family: 'Inter', sans-serif; }
-      .mono { font-family: 'JetBrains Mono', monospace; }
-    </style>
-  </head>
-  <body class="bg-[#fbfaf6] text-slate-900">
-    <div id="root"></div>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Screener Italia Pro - Collector Fix</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>html,body{font-family:Inter,sans-serif} .mono{font-family:JetBrains Mono,monospace}</style>
+</head>
+<body class="bg-[#fbfaf6] text-slate-900">
+<div class="max-w-[1700px] mx-auto px-4 py-5">
+<header class="flex flex-wrap justify-between items-center gap-3 mb-4">
+<div>
+<h1 class="text-[20px] font-bold">Screener Italia Pro — Collector Fix</h1>
+<div class="text-[11px] text-slate-500 mono mt-1">Fonte: <code class="bg-white px-1 border rounded">dati/snapshot.json</code> da collector.py • <span id="lastUpdate">caricamento...</span> • <span id="countInfo">0 titoli</span></div>
+</div>
+<div class="flex gap-2">
+<span id="statusBadge" class="text-[11px] bg-emerald-50 text-emerald-700 border rounded-full px-3 py-1">Carico...</span>
+<button id="btnReload" class="bg-slate-900 text-white rounded-full px-4 py-1.5 text-xs">🔄 Aggiorna</button>
+</div>
+</header>
 
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<div id="progress" class="h-1 bg-slate-200 rounded-full overflow-hidden mb-4 hidden"><div id="progressFill" class="h-full bg-emerald-500 transition-all" style="width:0%"></div></div>
 
-    <script type="text/babel">
-      // ============================================================
-      // TEMPLATE BASE v3.1 - Finale No Proxy
-      // Tabella snella fino a SCORET • Settings grafico sopra grafico
-      // NO Stooq • NO allorigins • NO proxy pubblici • NO TwelveData
-      // Unica fonte: GitHub Actions (collector.py) + Worker trigger 1-click
-      // ============================================================
-      const SNAPSHOT_URLS_STATIC = [
-        "./dati/snapshot.json",
-        "https://raw.githubusercontent.com/giunov-arch/Screener-Meta/main/dati/snapshot.json"
-      ];
+<div class="grid grid-cols-12 gap-4">
+<aside class="col-span-12 lg:col-span-3 space-y-3">
+<div class="bg-white border rounded-xl p-3">
+<div class="text-[11px] font-semibold mb-2">Connessione Dati</div>
+<div class="text-[11px] mono" id="log">Pronto. Tento caricamento da ./dati/snapshot.json poi da raw GitHub.</div>
+<div class="mt-3 bg-[#0f172a] text-emerald-300 rounded-lg p-2.5 h-[180px] overflow-auto text-[11px] mono leading-relaxed" id="logBox">Avvio...</div>
+</div>
+<div class="bg-white border rounded-xl p-3">
+<div class="text-[11px] font-semibold mb-2">Filtri</div>
+<input id="filtroTesto" placeholder="Cerca ticker/nome" class="w-full border rounded-lg px-2.5 py-1.5 text-xs mb-2">
+<select id="filtroSettore" class="w-full border rounded-lg px-2 py-1.5 text-xs"><option>Tutti</option></select>
+</div>
+</aside>
 
-      // Sostituisci con URL del tuo Worker dopo deploy
-      // Se vuoto, il tasto fa solo reload da GitHub raw (nessun proxy)
-      const WORKER_URL = "https://rapid-paper-5635.giunov.workers.dev";
+<main class="col-span-12 lg:col-span-9 space-y-4">
+<div class="bg-white border rounded-xl overflow-hidden">
+<div class="px-4 py-3 border-b flex justify-between"><h2 class="text-xs font-semibold">Tabella fino a SCORET (7 colonne)</h2><span class="text-[10px] text-slate-500" id="filtratiInfo">0 filtrati</span></div>
+<div class="overflow-auto max-h-[400px]">
+<table class="w-full text-[11px]">
+<thead class="sticky top-0 bg-slate-50 border-b text-[10px] uppercase text-slate-500"><tr><th class="text-left px-3 py-2">Ticker</th><th class="text-left px-3 py-2">Nome</th><th class="text-left px-3 py-2">Settore</th><th class="text-left px-3 py-2">Prezzo</th><th class="text-left px-3 py-2">ScoreF</th><th class="text-left px-3 py-2">ScoreT</th><th class="text-left px-3 py-2">ScoreTot</th></tr></thead>
+<tbody id="tbody"></tbody>
+</table>
+</div>
+</div>
 
-      const { useEffect, useRef, useState, useMemo } = React;
+<div id="dettaglio" class="hidden space-y-4"></div>
 
-      // ------------------------------------------------------------
-      // Demo fallback offline
-      // ------------------------------------------------------------
-      function generaStoriaDemo(basePrice, days) {
-        const out = [];
-        let price = basePrice;
-        const now = new Date();
-        for (let i = days - 1; i >= 0; i--) {
-          const d = new Date(now);
-          d.setDate(now.getDate() - i);
-          if (d.getDay() === 0 || d.getDay() === 6) continue;
-          const change = (Math.random() - 0.48) * 0.015;
-          const open = price;
-          const close = price * (1 + change);
-          const high = Math.max(open, close) * (1 + Math.random() * 0.008);
-          const low = Math.min(open, close) * (1 - Math.random() * 0.008);
-          const volume = Math.floor(500000 + Math.random() * 3500000);
-          out.push({
-            date: d.toISOString().slice(0, 10),
-            open: +open.toFixed(2),
-            high: +high.toFixed(2),
-            low: +low.toFixed(2),
-            close: +close.toFixed(2),
-            volume,
-          });
-          price = close;
-        }
-        return out;
-      }
+</main>
+</div>
+</div>
 
-      function creaDemoSnapshot() {
-        const base = [
-          { ticker: "ENI.MI", nome: "Eni SpA", settore: "Energy", price: 14.82 },
-          { ticker: "ENEL.MI", nome: "Enel", settore: "Utilities", price: 6.95 },
-          { ticker: "ISP.MI", nome: "Intesa Sanpaolo", settore: "Banche", price: 3.42 },
-          { ticker: "UCG.MI", nome: "UniCredit", settore: "Banche", price: 38.1 },
-          { ticker: "G.MI", nome: "Generali", settore: "Assicurazioni", price: 22.4 },
-        ];
-        const titoli = base.map(b => {
-          const history = generaStoriaDemo(b.price, 620);
-          const last = history[history.length - 1];
-          return {
-            ticker: b.ticker,
-            nome: b.nome,
-            settore: b.settore,
-            prezzo: last.close,
-            pe: +(5 + Math.random() * 15).toFixed(1),
-            pb: +(0.8 + Math.random() * 3).toFixed(2),
-            roe: +(8 + Math.random() * 20).toFixed(1),
-            divYield: +(2 + Math.random() * 6).toFixed(2),
-            cet1: b.settore === "Banche" ? +(13 + Math.random() * 3).toFixed(2) : 0,
-            evEbitda: +(4 + Math.random() * 10).toFixed(1),
-            debtEquity: +(0.1 + Math.random() * 1.2).toFixed(2),
-            margineNetto: +(3 + Math.random() * 22).toFixed(1),
-            crescitaRicavi: +(-2 + Math.random() * 12).toFixed(1),
-            fcfYield: +(2 + Math.random() * 9).toFixed(1),
-            beta: +(0.7 + Math.random() * 0.8).toFixed(2),
-            marketCap: +(2 + Math.random() * 60).toFixed(1),
-            distSMA200: +(-15 + Math.random() * 30).toFixed(1),
-            dist52w: +(-20 + Math.random() * 90).toFixed(1),
-            scoreF: Math.floor(40 + Math.random() * 50),
-            scoreT: Math.floor(30 + Math.random() * 60),
-            scoreTot: 0,
-            fondamentali: {},
-            consenso: { rating: "Buy", targetPrice: +(last.close * 1.2).toFixed(2), upside: 18, buy: 12, hold: 4, sell: 1, numAnalysts: 17 },
-            history,
-          };
-        });
-        titoli.forEach(t => t.scoreTot = Math.round((t.scoreF + t.scoreT) / 2));
-        return { generatedAt: new Date().toISOString(), titoli };
-      }
+<script>
+// Fix pagina bianca: niente Babel, solo vanilla JS
+const SNAPSHOT_URLS = [
+  "./dati/snapshot.json",
+  "https://raw.githubusercontent.com/giunov-arch/Screener-Meta/main/dati/snapshot.json"
+];
 
-      // ------------------------------------------------------------
-      // Calcoli indicatori - vanilla, commenti italiano
-      // ------------------------------------------------------------
-      function calcSMA(values, period) {
-        const res = [];
-        let sum = 0;
-        for (let i = 0; i < values.length; i++) {
-          sum += values[i];
-          if (i >= period) sum -= values[i - period];
-          res.push(i >= period - 1 ? sum / period : null);
-        }
-        return res;
-      }
+let snapshot = null;
+let selected = null;
+let titoliFiltrati = [];
 
-      function calcEMA(values, period) {
-        const res = [];
-        const k = 2 / (period + 1);
-        let ema = values[0] || 0;
-        for (let i = 0; i < values.length; i++) {
-          if (i === 0) ema = values[0];
-          else ema = values[i] * k + ema * (1 - k);
-          res.push(i >= period - 1 ? ema : null);
-        }
-        return res;
-      }
+function log(msg){
+  const box = document.getElementById('logBox');
+  const div = document.createElement('div');
+  div.textContent = msg;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  document.getElementById('log').textContent = msg;
+}
 
-      function calcBollinger(closes, period = 20, mult = 2) {
-        const sma = calcSMA(closes, period);
-        const upper = [], lower = [];
-        for (let i = 0; i < closes.length; i++) {
-          if (i < period - 1 || sma[i] === null) {
-            upper.push(null); lower.push(null);
-          } else {
-            let sumSq = 0;
-            for (let j = i - period + 1; j <= i; j++) sumSq += Math.pow(closes[j] - sma[i], 2);
-            const std = Math.sqrt(sumSq / period);
-            upper.push(sma[i] + mult * std);
-            lower.push(sma[i] - mult * std);
-          }
-        }
-        return { middle: sma, upper, lower };
-      }
+function calcScoreF(f){
+  let s=50;
+  if(f.pe && f.pe>0){ if(f.pe<12) s+=12; else if(f.pe<18) s+=6; else if(f.pe>25) s-=10; }
+  if(f.pb && f.pb>0){ if(f.pb<1.2) s+=8; else if(f.pb>3) s-=6; }
+  if(f.roe && f.roe>15) s+=15; else if(f.roe && f.roe<5) s-=10;
+  if(f.divYield && f.divYield>4) s+=8;
+  if(f.debtEquity && f.debtEquity<0.5) s+=6; else if(f.debtEquity && f.debtEquity>1.2) s-=8;
+  if(f.cet1 && f.cet1>14) s+=5;
+  return Math.max(0,Math.min(100,Math.round(s)));
+}
 
-      function calcRSI(closes, period = 14) {
-        const rsi = [];
-        let gain = 0, loss = 0;
-        for (let i = 0; i < closes.length; i++) {
-          if (i === 0) { rsi.push(null); continue; }
-          const diff = closes[i] - closes[i - 1];
-          if (i <= period) {
-            if (diff > 0) gain += diff; else loss -= diff;
-            if (i < period) { rsi.push(null); continue; }
-            gain /= period; loss /= period;
-          } else {
-            if (diff > 0) { gain = (gain * (period - 1) + diff) / period; loss = (loss * (period - 1)) / period; }
-            else { gain = (gain * (period - 1)) / period; loss = (loss * (period - 1) - diff) / period; }
-          }
-          const rs = loss === 0 ? 100 : gain / loss;
-          rsi.push(100 - (100 / (1 + rs)));
-        }
-        return rsi;
-      }
+function calcSMA(values, period){
+  const res=[]; let sum=0;
+  for(let i=0;i<values.length;i++){ sum+=values[i]; if(i>=period) sum-=values[i-period]; res.push(i>=period-1?sum/period:null); }
+  return res;
+}
+function calcScoreT(history){
+  if(!history || history.length<50) return 50;
+  const closes=history.map(h=>h.close);
+  const sma50=calcSMA(closes,50);
+  const sma200=calcSMA(closes,200);
+  const last=closes.length-1;
+  let s=50;
+  if(sma50[last] && sma200[last] && closes[last]>sma50[last] && sma50[last]>sma200[last]) s+=15;
+  if(closes[last] && sma50[last] && Math.abs(closes[last]-sma50[last])/sma50[last]<0.02) s+=5;
+  return Math.max(0,Math.min(100,Math.round(s)));
+}
 
-      function calcMACD(closes) {
-        const ema12 = calcEMA(closes, 12);
-        const ema26 = calcEMA(closes, 26);
-        const macdLine = closes.map((_, i) => ema12[i] !== null && ema26[i] !== null ? ema12[i] - ema26[i] : null);
-        const valid = macdLine.filter(v => v !== null);
-        const signalRaw = calcEMA(valid, 9);
-        let idx = 0;
-        const signalLine = macdLine.map(v => {
-          if (v === null) return null;
-          return signalRaw[idx++] ?? null;
-        });
-        const histogram = macdLine.map((v, i) => v !== null && signalLine[i] !== null ? v - signalLine[i] : null);
-        return { macdLine, signalLine, histogram };
-      }
+function normalizeConsenso(con, prezzo, scoreTot){
+  const fallbackRating = scoreTot>=70?"Buy":scoreTot>=50?"Hold":"Sell";
+  const fallback = {
+    rating: fallbackRating,
+    targetPrice: +(prezzo*1.18).toFixed(2),
+    upside: 18,
+    buy: fallbackRating==="Buy"?10:3,
+    hold:5,
+    sell: fallbackRating==="Sell"?4:1,
+    numAnalysts:8,
+    tp: +(prezzo*1.18).toFixed(2)
+  };
+  if(!con) return fallback;
+  // collector.py format: {tp, lo, hi, n, b, h, s}
+  if(con.tp || con.targetPrice || con.tp===0){
+    return {
+      rating: con.rating || fallback.rating,
+      targetPrice: con.tp || con.targetPrice || fallback.targetPrice,
+      tp: con.tp || con.targetPrice || fallback.tp,
+      lo: con.lo || 0,
+      hi: con.hi || 0,
+      buy: con.b ?? con.buy ?? fallback.buy,
+      hold: con.h ?? con.hold ?? fallback.hold,
+      sell: con.s ?? con.sell ?? fallback.sell,
+      numAnalysts: con.n ?? con.numAnalysts ?? fallback.numAnalysts,
+      upside: con.upside ?? 15
+    };
+  }
+  return {
+    rating: con.rating || fallback.rating,
+    targetPrice: con.targetPrice || con.tp || fallback.targetPrice,
+    tp: con.targetPrice || con.tp || fallback.tp,
+    buy: con.buy ?? con.b ?? fallback.buy,
+    hold: con.hold ?? con.h ?? fallback.hold,
+    sell: con.sell ?? con.s ?? fallback.sell,
+    numAnalysts: con.numAnalysts ?? con.n ?? fallback.numAnalysts,
+    upside: con.upside ?? 15,
+    lo: con.lo||0, hi: con.hi||0
+  };
+}
 
-      function resampleDailyToWeekly(daily) {
-        if (!daily || !daily.length) return [];
-        const weeks = {};
-        daily.forEach(bar => {
-          const d = new Date(bar.date);
-          const year = d.getFullYear();
-          const jan1 = new Date(year, 0, 1);
-          const week = Math.ceil((((d - jan1) / 86400000) + jan1.getDay() + 1) / 7);
-          const key = `${year}-W${week}`;
-          if (!weeks[key]) weeks[key] = [];
-          weeks[key].push(bar);
-        });
-        return Object.values(weeks).map(g => {
-          const first = g[0], last = g[g.length - 1];
-          return {
-            date: last.date,
-            open: first.open,
-            high: Math.max(...g.map(x => x.high)),
-            low: Math.min(...g.map(x => x.low)),
-            close: last.close,
-            volume: g.reduce((s, x) => s + x.volume, 0),
-          };
-        }).sort((a, b) => new Date(a.date) - new Date(b.date));
-      }
+function parseSnapshot(j){
+  // Supporta sia formato collector.py {titoli:[{ticker,nome,settore,barre,f,con}]} sia vecchio {titoli:[{ticker,prezzo,barre}]}
+  const titoliRaw = j.titoli || j || [];
+  const titoli = titoliRaw.map(t=>{
+    // collector.py barre: {d,o,h,l,c,v}
+    let history = [];
+    if(t.barre && t.barre.length){
+      history = t.barre.map(b=>({
+        date: b.d || b.date,
+        open: b.o ?? b.open,
+        high: b.h ?? b.high,
+        low: b.l ?? b.low,
+        close: b.c ?? b.close,
+        volume: b.v ?? b.volume || 0
+      }));
+    } else if(t.history){
+      history = t.history;
+    }
+    const f = t.f || { pe: t.PE || t.pe, pb: t.PB || t.pb, roe: t.ROE || t.roe, divYield: t.DivYield || t.divYield, debtEquity: t.DebtEquity, cet1: t.cet1, mcap: t.MarketCapMld };
+    const prezzo = history.length ? history[history.length-1].close : (t.prezzo || t.Prezzo || 0);
+    const scoreF = t.ScoreF ?? t.scoreF ?? calcScoreF(f);
+    const scoreT = t.ScoreT ?? t.scoreT ?? calcScoreT(history);
+    const scoreTot = t.ScoreTot ?? t.scoreTot ?? Math.round((scoreF+scoreT)/2);
+    const consenso = normalizeConsenso(t.con || t.consenso || t.Consenso, prezzo, scoreTot);
+    return {
+      ticker: t.ticker || t.Ticker,
+      nome: t.nome || t.Nome || t.ticker,
+      settore: t.settore || t.Settore || "Altro",
+      prezzo,
+      pe: f.pe || 0,
+      pb: f.pb || 0,
+      roe: f.roe || 0,
+      divYield: f.divYield || f.divYield || 0,
+      debtEquity: f.debtEquity || 0,
+      cet1: f.cet1 || 0,
+      marketCap: f.mcap || 0,
+      scoreF, scoreT, scoreTot,
+      consenso,
+      history,
+      f
+    };
+  });
+  return { generatedAt: j.generato_il || j.generatedAt || new Date().toISOString(), titoli };
+}
 
-      function detectPatterns(data, ind) {
-        if (!data.length) return {};
-        const i = data.length - 1;
-        const close = data[i].close;
-        const upper = ind.bb.upper[i], lower = ind.bb.lower[i];
-        const rsi = ind.rsi[i];
-        const macd = ind.macd.macdLine[i], signal = ind.macd.signalLine[i];
-        const macdPrev = ind.macd.macdLine[i-1], signalPrev = ind.macd.signalLine[i-1];
-        const sma50 = ind.sma50[i], sma200 = ind.sma200[i];
-        const sma50Prev = ind.sma50[i-1], sma200Prev = ind.sma200[i-1];
-        return {
-          bollingerBreakout: upper !== null && close > upper,
-          bollingerBreakdown: lower !== null && close < lower,
-          bollingerSqueeze: upper !== null && lower !== null && ind.bb.middle[i] !== null && ((upper - lower) / ind.bb.middle[i]) < 0.08,
-          macdBullishCross: macdPrev !== null && signalPrev !== null && macd !== null && signal !== null && macdPrev <= signalPrev && macd > signal,
-          macdBearishCross: macdPrev !== null && signalPrev !== null && macd !== null && signal !== null && macdPrev >= signalPrev && macd < signal,
-          macdBullish: macd !== null && signal !== null && macd > signal,
-          goldenCross: sma50Prev !== null && sma200Prev !== null && sma50 !== null && sma200 !== null && sma50Prev <= sma200Prev && sma50 > sma200,
-          deathCross: sma50Prev !== null && sma200Prev !== null && sma50 !== null && sma200 !== null && sma50Prev >= sma200Prev && sma50 < sma200,
-          rsiOverbought: rsi !== null && rsi > 70,
-          rsiOversold: rsi !== null && rsi < 30,
-          trendRialzista: sma50 !== null && sma200 !== null && close > sma50 && sma50 > sma200,
-          trendRibassista: sma50 !== null && sma200 !== null && close < sma50 && sma50 < sma200,
-          pullbackSMA50: sma50 !== null && Math.abs(close - sma50) / sma50 < 0.02,
-        };
-      }
+async function fetchSnapshot(){
+  log("→ Controllo snapshot collector.py...");
+  for(let url of SNAPSHOT_URLS){
+    try{
+      const bust = url + (url.includes("?")?"&":"?") + "v=" + Date.now();
+      log("→ Tento " + url);
+      const r = await fetch(bust, {cache:"no-store"});
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      const j = await r.json();
+      const snap = parseSnapshot(j);
+      if(!snap.titoli.length) throw new Error("vuoto");
+      snapshot = snap;
+      document.getElementById('lastUpdate').textContent = new Date(snap.generatedAt).toLocaleString('it-IT');
+      document.getElementById('countInfo').textContent = snap.titoli.length + " titoli";
+      document.getElementById('statusBadge').textContent = "Aggiornato";
+      log("✓ Trovato: " + new Date(snap.generatedAt).toLocaleString() + " (" + snap.titoli.length + " titoli) da " + url);
+      render();
+      return snap;
+    }catch(e){
+      log("✗ " + url + " → " + e.message);
+    }
+  }
+  throw new Error("Nessun snapshot disponibile");
+}
 
-      // ------------------------------------------------------------
-      // App principale
-      // ------------------------------------------------------------
-      function App() {
-        const [snapshot, setSnapshot] = useState(null);
-        const [log, setLog] = useState(["Pronto. Fonte: GitHub Actions (collector.py) — NO proxy pubblici"]);
-        const [selected, setSelected] = useState(null);
-        const [filtroTesto, setFiltroTesto] = useState("");
-        const [filtroSettore, setFiltroSettore] = useState("Tutti");
-        const [filtroPE, setFiltroPE] = useState(100);
-        const [filtroPattern, setFiltroPattern] = useState({});
-        const [timeframe, setTimeframe] = useState("1Y");
-        const [isWeekly, setIsWeekly] = useState(false);
-        const [showSMA20, setShowSMA20] = useState(false);
-        const [showSMA50, setShowSMA50] = useState(true);
-        const [showSMA200, setShowSMA200] = useState(true);
-        const [showBB, setShowBB] = useState(true);
-        const [showVol, setShowVol] = useState(true);
-        const [showRSI, setShowRSI] = useState(true);
-        const [showMACD, setShowMACD] = useState(true);
-        const [hoverIdx, setHoverIdx] = useState(null);
-        const [isUpdating, setIsUpdating] = useState(false);
-        const [progress, setProgress] = useState(0);
-        const [pollingCount, setPollingCount] = useState(0);
+function render(){
+  const testo = document.getElementById('filtroTesto').value.toLowerCase();
+  const settore = document.getElementById('filtroSettore').value;
+  titoliFiltrati = snapshot.titoli.filter(t=>{
+    if(testo && !(t.ticker+" "+t.nome).toLowerCase().includes(testo)) return false;
+    if(settore!=="Tutti" && t.settore!==settore) return false;
+    return true;
+  });
+  document.getElementById('filtratiInfo').textContent = titoliFiltrati.length + " filtrati";
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = titoliFiltrati.map(t=>{
+    const isSel = selected && selected.ticker===t.ticker;
+    return `<tr data-ticker="${t.ticker}" class="border-b hover:bg-slate-50 cursor-pointer ${isSel?'bg-slate-900 text-white':''}">
+      <td class="px-3 py-1.5 font-semibold mono">${t.ticker}</td>
+      <td class="px-3 py-1.5 truncate max-w-[160px]">${t.nome}</td>
+      <td class="px-3 py-1.5">${t.settore}</td>
+      <td class="px-3 py-1.5 mono">${t.prezzo.toFixed(2)}</td>
+      <td class="px-3 py-1.5"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${isSel?'bg-white text-slate-900':t.scoreF>70?'bg-emerald-100 text-emerald-700':'bg-slate-100'}">${t.scoreF}</span></td>
+      <td class="px-3 py-1.5"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${isSel?'bg-white text-slate-900':t.scoreT>70?'bg-emerald-100 text-emerald-700':'bg-slate-100'}">${t.scoreT}</span></td>
+      <td class="px-3 py-1.5 font-bold mono">${t.scoreTot}</td>
+    </tr>`;
+  }).join('');
+  tbody.querySelectorAll('tr').forEach(tr=>{
+    tr.addEventListener('click',()=>{
+      const ticker = tr.getAttribute('data-ticker');
+      selected = snapshot.titoli.find(x=>x.ticker===ticker);
+      render();
+      renderDettaglio();
+    });
+  });
+  if(!selected && titoliFiltrati.length) { selected = titoliFiltrati[0]; renderDettaglio(); }
+  // popola settori
+  const sel = document.getElementById('filtroSettore');
+  if(sel.options.length<=1){
+    const settori = ["Tutti", ...Array.from(new Set(snapshot.titoli.map(t=>t.settore)))];
+    sel.innerHTML = settori.map(s=>`<option>${s}</option>`).join('');
+  }
+}
 
-        const priceRef = useRef(null);
-        const rsiRef = useRef(null);
-        const macdRef = useRef(null);
-
-        const tfMap = { "1M": 22, "3M": 63, "6M": 126, "1Y": 252, "2Y": 500, "MAX": 99999 };
-
-        function addLog(msg) {
-          setLog(l => [...l.slice(-20), msg]);
-        }
-
-        function calcScoreFondamentale(f) {
-          // Deterministico - non random, così non cambia a ogni fetch
-          let s = 50;
-          if (f.pe && f.pe > 0 && f.pe < 12) s += 12; else if (f.pe && f.pe > 25) s -= 10;
-          if (f.pb && f.pb < 1.2) s += 8; else if (f.pb && f.pb > 3) s -= 6;
-          if (f.roe && f.roe > 15) s += 15; else if (f.roe && f.roe < 5) s -= 10;
-          if (f.divYield && f.divYield > 4) s += 8;
-          if (f.debtEquity && f.debtEquity < 0.5) s += 6; else if (f.debtEquity && f.debtEquity > 1.2) s -= 8;
-          if (f.cet1 && f.cet1 > 14) s += 5;
-          return Math.max(0, Math.min(100, Math.round(s)));
-        }
-
-        function calcScoreTecnicoFromHistory(history) {
-          if (!history || history.length < 50) return 50;
-          const closes = history.map(h => h.close);
-          const sma50 = calcSMA(closes, 50);
-          const sma200 = calcSMA(closes, 200);
-          const rsi = calcRSI(closes, 14);
-          const last = closes.length - 1;
-          let s = 50;
-          if (sma50[last] && sma200[last] && closes[last] > sma50[last] && sma50[last] > sma200[last]) s += 15;
-          if (rsi[last] && rsi[last] > 50 && rsi[last] < 70) s += 10; else if (rsi[last] && rsi[last] > 75) s -= 8;
-          if (closes[last] && sma50[last] && Math.abs(closes[last] - sma50[last]) / sma50[last] < 0.02) s += 5;
-          return Math.max(0, Math.min(100, Math.round(s)));
-        }
-
-        function normalizeConsenso(con, prezzo, scoreTot) {
-          const fallbackRating = scoreTot >= 70 ? "Buy" : scoreTot >= 50 ? "Hold" : "Sell";
-          const fallback = {
-            rating: fallbackRating,
-            targetPrice: +(prezzo * 1.18).toFixed(2),
-            upside: 18,
-            buy: fallbackRating === "Buy" ? 10 : 3,
-            hold: 5,
-            sell: fallbackRating === "Sell" ? 4 : 1,
-            numAnalysts: 8
-          };
-          if (!con || typeof con !== "object") return fallback;
-          // Se oggetto esiste ma campi vuoti, usa fallback per ogni campo
-          const rating = con.rating || con.Rating || fallback.rating;
-          const targetPrice = con.targetPrice ?? con.target ?? con.TargetPrice ?? fallback.targetPrice;
-          const upside = con.upside ?? con.upsidePct ?? con.Upside ?? fallback.upside;
-          const buy = con.buy ?? con.Buy ?? fallback.buy;
-          const hold = con.hold ?? con.Hold ?? fallback.hold;
-          const sell = con.sell ?? con.Sell ?? fallback.sell;
-          const numAnalysts = con.numAnalysts ?? con.numAnalyst ?? ((buy||0)+(hold||0)+(sell||0)) || fallback.numAnalysts;
-          // Se tutto zero o vuoto, ritorna fallback
-          if (!rating && !targetPrice && !buy && !hold && !sell) return fallback;
-          return { rating, targetPrice, upside, buy, hold, sell, numAnalysts };
-        }
-
-        async function fetchLatestSnapshot() {
-          addLog("→ Controllo snapshot da GitHub raw con cache bust...");
-          for (let url of SNAPSHOT_URLS_STATIC) {
-            try {
-              const bustUrl = url + (url.includes("?") ? "&" : "?") + "v=" + Date.now();
-              const r = await fetch(bustUrl, { cache: "no-store" });
-              if (!r.ok) throw new Error(r.status);
-              const j = await r.json();
-              let titoli = [];
-              if (j.titoli) {
-                titoli = j.titoli.map(t => {
-                  const prezzo = t.prezzo || t.Prezzo || t.barre?.[t.barre.length-1]?.c || t.f?.prezzo || 0;
-                  const history = (t.barre || []).map(b => ({
-                    date: b.d || b.date,
-                    open: b.o ?? b.open,
-                    high: b.h ?? b.high,
-                    low: b.l ?? b.low,
-                    close: b.c ?? b.close,
-                    volume: b.v ?? b.volume ?? 0
-                  }));
-                  const f = {
-                    pe: t.f?.pe ?? t.PE ?? t.pe ?? 0,
-                    pb: t.f?.pb ?? t.PB ?? t.pb ?? 0,
-                    roe: t.f?.roe ?? t.ROE ?? t.roe ?? 0,
-                    divYield: t.f?.divYield ?? t.DivYield ?? t.divYield ?? 0,
-                    cet1: t.f?.cet1 ?? t.cet1 ?? 0,
-                    evEbitda: t.f?.evEbitda ?? t.evEbitda ?? 0,
-                    debtEquity: t.f?.debtEquity ?? t.debtEquity ?? 0,
-                    margineNetto: t.f?.margine ?? t.margineNetto ?? 0,
-                    crescitaRicavi: t.f?.crescitaRic ?? t.crescitaRicavi ?? 0,
-                    fcfYield: t.f?.fcfYield ?? t.fcfYield ?? 0,
-                    beta: t.f?.beta ?? t.beta ?? 1,
-                    marketCap: t.f?.mcap ?? t.marketCap ?? 0
-                  };
-                  // Score deterministico - non random
-                  const scoreF = t.scoreF ?? t.ScoreF ?? t.f?.scoreF ?? calcScoreFondamentale(f);
-                  const scoreT = t.scoreT ?? t.ScoreT ?? t.f?.scoreT ?? calcScoreTecnicoFromHistory(history);
-                  const scoreTot = t.scoreTot ?? t.ScoreTot ?? Math.round((scoreF + scoreT) / 2);
-                  const consensoNorm = normalizeConsenso(t.con || t.consenso || t.Consenso, prezzo, scoreTot);
-                  return {
-                    ticker: t.ticker || t.Ticker,
-                    nome: t.nome || t.Nome || t.ticker,
-                    settore: t.settore || t.Settore || "Altro",
-                    prezzo: prezzo,
-                    pe: f.pe,
-                    pb: f.pb,
-                    roe: f.roe,
-                    divYield: f.divYield,
-                    cet1: f.cet1,
-                    evEbitda: f.evEbitda,
-                    debtEquity: f.debtEquity,
-                    margineNetto: f.margineNetto,
-                    crescitaRicavi: f.crescitaRicavi,
-                    fcfYield: f.fcfYield,
-                    beta: f.beta,
-                    marketCap: f.marketCap,
-                    distSMA200: t.DistSMA200 ?? t.distSMA200 ?? 0,
-                    dist52w: t.Dist52w ?? t.dist52w ?? 0,
-                    scoreF: scoreF,
-                    scoreT: scoreT,
-                    scoreTot: scoreTot,
-                    consenso: consensoNorm,
-                    history: history
-                  };
-                });
-              }
-              if (!titoli.length) throw new Error("vuoto");
-              const snap = { generatedAt: j.generato_il || new Date().toISOString(), titoli };
-              setSnapshot(snap);
-              if (!selected) setSelected(titoli[0]);
-              addLog(`✓ Snapshot trovato: ${new Date(snap.generatedAt).toLocaleString('it-IT')} (${titoli.length} titoli) da ${url.includes('raw') ? 'GitHub raw' : 'locale'}`);
-              return snap;
-            } catch (e) {
-              addLog(`✗ ${url} → ${e.message}`);
-            }
-          }
-          throw new Error("Snapshot non disponibile");
-        }
-
-        useEffect(() => {
-          fetchLatestSnapshot().catch(() => {
-            const demo = creaDemoSnapshot();
-            setSnapshot(demo);
-            setSelected(demo.titoli[0]);
-            addLog("⚠ Uso dati demo offline (GitHub non raggiungibile)");
-          });
-        }, []);
-
-        // Fetch consenso/fondamentali via Worker CORS se mancanti (suggerimento utente: usa yfinance o metodo CORS)
-        useEffect(() => {
-          if (!selected || !WORKER_URL || WORKER_URL.includes("giunov.workers.dev")) return;
-          // Se consenso è fallback con pochi analisti, prova a prendere dati veri da Yahoo via Worker
-          if (selected.consenso && selected.consenso.numAnalysts <= 9) {
-            (async () => {
-              try {
-                addLog(`→ Fetch consenso/fondamentali per ${selected.ticker} via Worker CORS...`);
-                const r = await fetch(`${WORKER_URL}/yahoo?symbol=${encodeURIComponent(selected.ticker)}&modules=financialData,price,defaultKeyStatistics,recommendationTrend`);
-                if (!r.ok) throw new Error(r.status);
-                const j = await r.json();
-                const result = j.quoteSummary?.result?.[0];
-                if (!result) return;
-                const fin = result.financialData || {};
-                const price = result.price || {};
-                const trend = result.recommendationTrend?.trend?.[0] || {};
-                const stats = result.defaultKeyStatistics || {};
-                // Aggiorna consenso
-                const newConsenso = {
-                  rating: (fin.recommendationKey ? fin.recommendationKey.charAt(0).toUpperCase() + fin.recommendationKey.slice(1) : selected.consenso.rating),
-                  targetPrice: price.targetMeanPrice?.raw || selected.consenso.targetPrice,
-                  upside: price.targetMeanPrice?.raw ? +((price.targetMeanPrice.raw / selected.prezzo -1)*100).toFixed(1) : selected.consenso.upside,
-                  buy: (trend.strongBuy?.raw||0) + (trend.buy?.raw||0) || selected.consenso.buy,
-                  hold: trend.hold?.raw || selected.consenso.hold,
-                  sell: (trend.sell?.raw||0) + (trend.strongSell?.raw||0) || selected.consenso.sell,
-                  numAnalysts: (trend.strongBuy?.raw||0)+(trend.buy?.raw||0)+(trend.hold?.raw||0)+(trend.sell?.raw||0)+(trend.strongSell?.raw||0) || selected.consenso.numAnalysts
-                };
-                // Aggiorna fondamentali se disponibili
-                const updated = { 
-                  ...selected, 
-                  consenso: newConsenso,
-                  pe: stats.trailingPE?.raw || selected.pe,
-                  pb: stats.priceToBook?.raw || selected.pb,
-                  roe: fin.returnOnEquity?.raw ? fin.returnOnEquity.raw*100 : selected.roe
-                };
-                setSelected(updated);
-                addLog(`✓ Consenso aggiornato per ${selected.ticker}: ${newConsenso.rating} target ${newConsenso.targetPrice}`);
-              } catch (e) {
-                addLog(`⚠ Fetch consenso via Worker fallito per ${selected.ticker}: ${e.message}`);
-              }
-            })();
-          }
-        }, [selected?.ticker]);
-
-        const settori = useMemo(() => {
-          if (!snapshot) return ["Tutti"];
-          const s = new Set(snapshot.titoli.map(t => t.settore));
-          return ["Tutti", ...Array.from(s)];
-        }, [snapshot]);
-
-        const chartData = useMemo(() => {
-          if (!selected) return [];
-          let data = isWeekly ? resampleDailyToWeekly(selected.history) : selected.history;
-          const n = tfMap[timeframe] || 252;
-          return data.slice(-n);
-        }, [selected, timeframe, isWeekly]);
-
-        const indicators = useMemo(() => {
-          const closes = chartData.map(c => c.close);
-          return {
-            sma20: calcSMA(closes, 20),
-            sma50: calcSMA(closes, 50),
-            sma200: calcSMA(closes, 200),
-            bb: calcBollinger(closes, 20, 2),
-            rsi: calcRSI(closes, 14),
-            macd: calcMACD(closes),
-          };
-        }, [chartData]);
-
-        const patterns = useMemo(() => detectPatterns(chartData, indicators), [chartData, indicators]);
-
-        const titoliFiltrati = useMemo(() => {
-          if (!snapshot) return [];
-          return snapshot.titoli.filter(t => {
-            if (filtroTesto && !`${t.ticker} ${t.nome}`.toLowerCase().includes(filtroTesto.toLowerCase())) return false;
-            if (filtroSettore !== "Tutti" && t.settore !== filtroSettore) return false;
-            if (t.pe && t.pe > filtroPE) return false;
-            if (Object.keys(filtroPattern).some(k => filtroPattern[k])) {
-              const closes = t.history.map(h => h.close);
-              const sma50 = calcSMA(closes, 50), sma200 = calcSMA(closes, 200);
-              const bb = calcBollinger(closes, 20, 2), rsi = calcRSI(closes, 14), macd = calcMACD(closes);
-              const data = t.history.slice(-100);
-              const ind = { sma50: sma50.slice(-100), sma200: sma200.slice(-100), bb: { upper: bb.upper.slice(-100), lower: bb.lower.slice(-100), middle: bb.middle.slice(-100) }, rsi: rsi.slice(-100), macd };
-              const p = detectPatterns(data, { sma50: ind.sma50, sma200: ind.sma200, bb: ind.bb, rsi: ind.rsi, macd: ind.macd, sma20: [] });
-              for (let k in filtroPattern) if (filtroPattern[k] && !p[k]) return false;
-            }
-            return true;
-          });
-        }, [snapshot, filtroTesto, filtroSettore, filtroPE, filtroPattern]);
-
-        useEffect(() => {
-          if (!chartData.length) return;
-          drawPrice(priceRef.current, chartData, indicators, { showSMA20, showSMA50, showSMA200, showBB, showVol, hoverIdx });
-          if (showRSI) drawRSI(rsiRef.current, indicators.rsi, hoverIdx);
-          if (showMACD) drawMACD(macdRef.current, indicators.macd, hoverIdx);
-        }, [chartData, indicators, showSMA20, showSMA50, showSMA200, showBB, showVol, showRSI, showMACD, hoverIdx]);
-
-        function handleMouseMove(e) {
-          const rect = e.target.getBoundingClientRect();
-          const x = e.clientX - rect.left;
-          const idx = Math.floor((x / rect.width) * chartData.length);
-          setHoverIdx(Math.max(0, Math.min(chartData.length - 1, idx)));
-        }
-
-        // ------------------------------------------------------------
-        // Nuovo meccanismo aggiornamento - NO proxy
-        // ------------------------------------------------------------
-        async function aggiornaPrezzi() {
-          if (isUpdating) return;
-          setIsUpdating(true);
-          setProgress(5);
-          addLog("→ Avvio aggiornamento automatico (NO proxy pubblici)...");
-          addLog(`→ Sorgente unica: GitHub Actions (collector.py) via ${SNAPSHOT_URLS_STATIC[1]}`);
-
-          try {
-            // Tentativo trigger via Worker (se deployato)
-            addLog(`→ Tentativo trigger workflow via Worker ${WORKER_URL}...`);
-            let workerOk = false;
-            try {
-              const controller = new AbortController();
-              const timeout = setTimeout(() => controller.abort(), 5000);
-              const r = await fetch(WORKER_URL, { method: "POST", signal: controller.signal });
-              clearTimeout(timeout);
-              if (r.ok) {
-                const j = await r.json();
-                if (j.ok) {
-                  workerOk = true;
-                  addLog(`✓ Workflow fetch.yml lanciato via Worker (status ${j.status})`);
-                  addLog("→ Polling ogni 30s per 5 min in attesa nuovi dati su GitHub raw...");
-                  let attempts = 0;
-                  const oldDate = snapshot?.generatedAt;
-                  const interval = setInterval(async () => {
-                    attempts++;
-                    setPollingCount(attempts);
-                    setProgress(Math.min(95, 10 + (attempts / 10) * 90));
-                    addLog(`→ Polling ${attempts}/10 controllo snapshot aggiornato...`);
-                    try {
-                      const newSnap = await fetchLatestSnapshot();
-                      if (newSnap.generatedAt !== oldDate) {
-                        addLog(`✓ Nuovi dati disponibili! ${new Date(newSnap.generatedAt).toLocaleString('it-IT')}`);
-                        addLog(`✓ Aggiornamento completato - ${newSnap.titoli.length} titoli`);
-                        clearInterval(interval);
-                        setIsUpdating(false);
-                        setProgress(100);
-                        setTimeout(() => setProgress(0), 1500);
-                      }
-                    } catch (e) {
-                      addLog(`✗ Polling errore ${e.message}`);
-                    }
-                    if (attempts >= 10) {
-                      clearInterval(interval);
-                      setIsUpdating(false);
-                      setProgress(0);
-                      addLog("→ Polling terminato dopo 5 min. Controlla su GitHub Actions se workflow completato.");
-                    }
-                  }, 30000);
-                  return;
-                }
-              }
-              throw new Error("Worker non raggiungibile o errore");
-            } catch (e) {
-              addLog(`⚠ Worker non deployato o errore: ${e.message}`);
-              addLog("→ Fallback: reload diretto da GitHub raw con cache bust (nessun proxy)");
-            }
-
-            // Fallback: solo reload da GitHub raw
-            setProgress(50);
-            const newSnap = await fetchLatestSnapshot();
-            setProgress(100);
-            addLog(`✓ Dati ricaricati da GitHub raw: ${new Date(newSnap.generatedAt).toLocaleString('it-IT')}`);
-            if (!workerOk) {
-              addLog("→ Per trigger automatico 1-click senza aprire GitHub, deploya Worker (vedi worker.js - 1 minuto)");
-            }
-          } catch (e) {
-            addLog(`✗ Errore aggiornamento: ${e.message}`);
-          } finally {
-            if (!isUpdating || progress >= 100) {
-              setTimeout(() => {
-                setIsUpdating(false);
-                setProgress(0);
-                setPollingCount(0);
-              }, 1200);
-            }
-          }
-        }
-
-        if (!snapshot) return <div className="p-8 text-sm">Caricamento dati da GitHub...</div>;
-
-        return (
-          <div className="max-w-[1700px] mx-auto px-4 py-5">
-            <header className="flex flex-wrap justify-between items-center gap-3 mb-3">
-              <div>
-                <h1 className="text-[20px] font-bold tracking-tight">Screener Italia Pro — Finale No Proxy</h1>
-                <div className="text-[11px] text-slate-500 mono mt-1">
-                  Template Base v3.1 • URL statico: <code className="bg-white px-1.5 py-0.5 rounded border">{SNAPSHOT_URLS_STATIC[0]}</code> • {snapshot.generatedAt?.slice(0,10)} • {snapshot.titoli.length} titoli • NO proxy
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] bg-white border rounded-full px-3 py-1 mono">
-                  Ultimo: {new Date(snapshot.generatedAt).toLocaleString('it-IT').slice(0,16)}
-                </span>
-                <button
-                  onClick={aggiornaPrezzi}
-                  disabled={isUpdating}
-                  className="bg-slate-900 text-white rounded-full px-4 py-1.5 text-xs font-medium hover:bg-black disabled:opacity-60"
-                >
-                  {isUpdating ? `⏳ ${pollingCount ? `Polling ${pollingCount}/10` : "Avvio..."}`
-                    : "🔄 Aggiorna Prezzi"}
-                </button>
-              </div>
-            </header>
-
-            {isUpdating && (
-              <div className="h-1 bg-slate-200 rounded-full overflow-hidden mb-4">
-                <div className="h-full bg-emerald-500 transition-all" style={{ width: `${progress}%` }}></div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-12 gap-4">
-              <aside className="col-span-12 lg:col-span-3 space-y-3">
-                <div className="bg-white border rounded-xl p-3">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-[11px] font-semibold">Connessione Dati</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${isUpdating ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
-                      {isUpdating ? "Aggiornamento..." : "Aggiornato"}
-                    </span>
-                  </div>
-                  <div className="text-[11px] mono">Ultimo: {new Date(snapshot.generatedAt).toLocaleString('it-IT')}</div>
-                  <div className="text-[10px] text-slate-500 mt-1 leading-relaxed">
-                    Sorgente: GitHub Actions (collector.py) • Aggiornamento giornaliero 17:00 UTC • Trigger 1-click via Worker • NO proxy pubblici • NO Stooq • NO TwelveData
-                  </div>
-                  <div className="mt-3 bg-[#0f172a] text-emerald-300 rounded-lg p-2.5 h-[170px] overflow-auto text-[11px] mono leading-relaxed">
-                    {log.map((l,i) => <div key={i}>{l}</div>)}
-                  </div>
-                  <div className="mt-2 text-[10px] text-slate-500">
-                    1 click = trigger workflow fetch.yml via Worker (se deployato) + polling ogni 30s raw GitHub. Senza Worker: solo reload con cache bust.
-                  </div>
-                </div>
-
-                <div className="bg-white border rounded-xl p-3 space-y-3">
-                  <div className="text-[11px] font-semibold">Filtri Fondamentali</div>
-                  <input value={filtroTesto} onChange={e=>setFiltroTesto(e.target.value)} placeholder="Cerca ticker/nome" className="w-full border rounded-lg px-2.5 py-1.5 text-xs" />
-                  <div className="grid grid-cols-2 gap-2">
-                    <select value={filtroSettore} onChange={e=>setFiltroSettore(e.target.value)} className="border rounded-lg px-2 py-1.5 text-xs">
-                      {settori.map(s=><option key={s}>{s}</option>)}
-                    </select>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px]">PE max</span>
-                      <input type="number" value={filtroPE} onChange={e=>setFiltroPE(+e.target.value)} className="w-full border rounded px-1 py-1 text-xs" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white border rounded-xl p-3">
-                  <div className="text-[11px] font-semibold mb-2">Screener Tecnico</div>
-                  <div className="space-y-1.5 text-[11px]">
-                    {[
-                      ["bollingerBreakout","BB Breakout ↑"],
-                      ["bollingerBreakdown","BB Breakdown ↓"],
-                      ["bollingerSqueeze","BB Squeeze"],
-                      ["macdBullishCross","MACD Bull Cross"],
-                      ["macdBearishCross","MACD Bear Cross"],
-                      ["goldenCross","Golden Cross"],
-                      ["trendRialzista","Trend Rialzista"],
-                      ["trendRibassista","Trend Ribassista"],
-                      ["rsiOverbought","RSI >70"],
-                      ["rsiOversold","RSI <30"],
-                      ["pullbackSMA50","Pullback SMA50"],
-                    ].map(([k,label])=>(
-                      <label key={k} className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={!!filtroPattern[k]} onChange={()=>setFiltroPattern(p=>({...p,[k]:!p[k]}))} className="accent-slate-900" />
-                        <span>{label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </aside>
-
-              <main className="col-span-12 lg:col-span-9 space-y-4">
-                <div className="bg-white border rounded-xl overflow-hidden">
-                  <div className="px-4 py-3 border-b flex justify-between items-center">
-                    <h2 className="text-xs font-semibold">Tabella Riassuntiva — fino a SCORET (7 colonne)</h2>
-                    <span className="text-[10px] text-slate-500">{titoliFiltrati.length} titoli filtrati</span>
-                  </div>
-                  <div className="overflow-auto max-h-[380px]">
-                    <table className="w-full text-[11px]">
-                      <thead className="sticky top-0 bg-slate-50 border-b text-[10px] uppercase tracking-wider text-slate-500">
-                        <tr>
-                          <th className="text-left px-3 py-2">Ticker</th>
-                          <th className="text-left px-3 py-2">Nome</th>
-                          <th className="text-left px-3 py-2">Settore</th>
-                          <th className="text-left px-3 py-2">Prezzo</th>
-                          <th className="text-left px-3 py-2">ScoreF</th>
-                          <th className="text-left px-3 py-2">ScoreT</th>
-                          <th className="text-left px-3 py-2">ScoreTot</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {titoliFiltrati.map(t=>{
-                          const isSel = selected?.ticker===t.ticker;
-                          return (
-                          <tr key={t.ticker} onClick={()=>setSelected(t)} className={`border-b hover:bg-slate-50 cursor-pointer ${isSel?'bg-slate-900 text-white hover:bg-slate-800':''}`}>
-                            <td className="px-3 py-1.5 font-semibold mono">{t.ticker}</td>
-                            <td className="px-3 py-1.5 truncate max-w-[160px]">{t.nome}</td>
-                            <td className="px-3 py-1.5">{t.settore}</td>
-                            <td className="px-3 py-1.5 mono">{t.prezzo?.toFixed(2)}</td>
-                            <td className="px-3 py-1.5"><span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${isSel ? 'bg-white text-slate-900' : t.scoreF>70?'bg-emerald-100 text-emerald-700':'bg-slate-100 text-slate-700'}`}>{t.scoreF ?? "—"}</span></td>
-                            <td className="px-3 py-1.5"><span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${isSel ? 'bg-white text-slate-900' : t.scoreT>70?'bg-emerald-100 text-emerald-700':'bg-slate-100 text-slate-700'}`}>{t.scoreT ?? "—"}</span></td>
-                            <td className="px-3 py-1.5 font-bold mono">{t.scoreTot ?? "—"}</td>
-                          </tr>
-                        )})}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {selected && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-12 gap-3">
-                      <div className="col-span-12 lg:col-span-8 bg-white border rounded-xl p-4">
-                        <h3 className="text-xs font-semibold mb-3">{selected.ticker} — {selected.nome} • Fondamentali 13 campi</h3>
-                        <div className="grid grid-cols-3 md:grid-cols-4 gap-2 text-[11px]">
-                          {[
-                            ["Prezzo", selected.prezzo],
-                            ["PE", selected.pe],
-                            ["PB", selected.pb],
-                            ["ROE %", selected.roe],
-                            ["Div %", selected.divYield],
-                            ["CET1 %", selected.cet1],
-                            ["EV/EBITDA", selected.evEbitda],
-                            ["Debt/Eq", selected.debtEquity],
-                            ["Margine %", selected.margineNetto],
-                            ["Cresc Ric %", selected.crescitaRicavi],
-                            ["FCF Yield %", selected.fcfYield],
-                            ["Beta", selected.beta],
-                            ["MktCap Mld", selected.marketCap],
-                          ].map(([k,v])=>(
-                            <div key={k} className="bg-slate-50 rounded-lg px-2.5 py-2">
-                              <div className="text-[10px] text-slate-500 uppercase">{k}</div>
-                              <div className="font-semibold mono">{v ?? "—"}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="col-span-12 lg:col-span-4 space-y-3">
-                        <div className="bg-white border rounded-xl p-3">
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="text-[11px] font-semibold">Consenso</span>
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100">{selected.consenso.numAnalysts || 8} analisti</span>
-                          </div>
-                          <div className="text-[11px] space-y-1.5">
-                            <div className="flex justify-between items-center">
-                              <span>Rating</span>
-                              <b className={`px-2 py-0.5 rounded-full text-[10px] ${selected.consenso.rating==="Buy"?"bg-emerald-500 text-white":selected.consenso.rating==="Sell"?"bg-red-500 text-white":"bg-amber-400 text-slate-900"}`}>{selected.consenso.rating || "Hold"}</b>
-                            </div>
-                            <div className="flex justify-between"><span>Target</span><span className="mono font-medium">{selected.consenso.targetPrice ? selected.consenso.targetPrice.toFixed(2) : "—"} €</span></div>
-                            <div className="flex justify-between"><span>Upside</span><span className={`font-medium ${selected.consenso.upside>=0?"text-emerald-600":"text-red-600"}`}>{selected.consenso.upside ?? "—"}%</span></div>
-                            <div className="flex justify-between"><span>Buy/Hold/Sell</span><span className="mono">{selected.consenso.buy ?? 0}/{selected.consenso.hold ?? 0}/{selected.consenso.sell ?? 0}</span></div>
-                            <div className="text-[9px] text-slate-400 mt-1">Fonte: {selected.consenso.targetPrice ? "yfinance + fallback deterministico" : "calcolato da Score"}</div>
-                          </div>
-                        </div>
-                        <div className="bg-white border rounded-xl p-3">
-                          <div className="text-[11px] font-semibold mb-2">Score</div>
-                          {[
-                            ["ScoreF", selected.scoreF],
-                            ["ScoreT", selected.scoreT],
-                            ["ScoreTot", selected.scoreTot],
-                          ].map(([k,v])=>(
-                            <div key={k} className="mb-2">
-                              <div className="flex justify-between text-[11px]"><span>{k}</span><span className="mono">{v}</span></div>
-                              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-slate-900" style={{width: `${v}%`}}></div></div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-white border rounded-xl overflow-hidden">
-                      <div className="px-4 py-3 border-b bg-slate-50">
-                        <h3 className="text-xs font-semibold">Dettaglio Tecnico & Fondamentale per {selected.ticker}</h3>
-                      </div>
-                      <div className="grid grid-cols-12">
-                        <div className="col-span-12 lg:col-span-7 p-3">
-                          <table className="w-full text-[11px]">
-                            <thead className="text-[10px] uppercase text-slate-500 border-b"><tr><th className="text-left py-1">Metrica</th><th className="text-right py-1">Valore</th></tr></thead>
-                            <tbody className="divide-y">
-                              {[
-                                ["PE", selected.pe],
-                                ["PB", selected.pb],
-                                ["ROE %", selected.roe],
-                                ["DivYield %", selected.divYield],
-                                ["CET1 %", selected.cet1],
-                                ["EV/EBITDA", selected.evEbitda],
-                                ["Debt/Equity", selected.debtEquity],
-                                ["Dist SMA200 %", selected.distSMA200],
-                                ["Dist 52w %", selected.dist52w],
-                                ["RSI", indicators.rsi[indicators.rsi.length-1]?.toFixed(1)],
-                                ["MACD Hist", indicators.macd.histogram[indicators.macd.histogram.length-1]?.toFixed(3)],
-                                ["Trend", patterns.trendRialzista ? "Rialzista" : patterns.trendRibassista ? "Ribassista" : "Neutrale"],
-                              ].map(([k,v])=>(
-                                <tr key={k}><td className="py-1.5">{k}</td><td className="py-1.5 text-right mono font-medium">{v ?? "—"}</td></tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        <div className="col-span-12 lg:col-span-5 bg-slate-50 p-3 border-l">
-                          <div className="text-[11px] font-semibold mb-2">Pattern rilevati</div>
-                          <div className="space-y-1.5">
-                            {Object.entries(patterns).map(([k,v])=>(
-                              <div key={k} className="flex justify-between items-center text-[11px] bg-white rounded px-2 py-1.5 border">
-                                <span className="capitalize">{k.replace(/([A-Z])/g,' $1')}</span>
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${v ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>{v ? "✓" : "—"}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-white border rounded-xl overflow-hidden">
-                      <div className="px-4 py-3 border-b bg-[#fcfcf9]">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <h3 className="text-xs font-semibold">Grafico — Impostazioni sopra il grafico</h3>
-                          <div className="text-[10px] text-slate-500">Template Base v3.1 • Settings direttamente sopra canvas</div>
-                        </div>
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          <span className="text-[10px] uppercase tracking-wider text-slate-500">Timeframe</span>
-                          <div className="flex gap-1">
-                            {Object.keys(tfMap).map(tf=>(
-                              <button key={tf} onClick={()=>setTimeframe(tf)} className={`h-7 px-3 rounded-full text-[11px] font-medium transition ${timeframe===tf ? 'bg-slate-900 text-white' : 'bg-white border hover:bg-slate-50'}`}>{tf}</button>
-                            ))}
-                          </div>
-                          <span className="w-px h-5 bg-slate-200 mx-1"></span>
-                          <span className="text-[10px] uppercase tracking-wider text-slate-500">Granularità</span>
-                          <div className="flex rounded-full overflow-hidden border">
-                            <button onClick={()=>setIsWeekly(false)} className={`h-7 px-3.5 text-[11px] font-medium ${!isWeekly ? 'bg-slate-900 text-white' : 'bg-white'}`}>D</button>
-                            <button onClick={()=>setIsWeekly(true)} className={`h-7 px-3.5 text-[11px] font-medium ${isWeekly ? 'bg-slate-900 text-white' : 'bg-white'}`}>W</button>
-                          </div>
-                          <span className="ml-2 text-[11px] text-slate-500">{chartData.length} candele • {isWeekly ? "Weekly" : "Daily"}</span>
-                        </div>
-                        <div className="mt-3 flex flex-wrap gap-4 text-[11px]">
-                          <label className="flex items-center gap-1.5"><input type="checkbox" checked={showSMA20} onChange={e=>setShowSMA20(e.target.checked)} className="accent-slate-900" /> SMA20</label>
-                          <label className="flex items-center gap-1.5"><input type="checkbox" checked={showSMA50} onChange={e=>setShowSMA50(e.target.checked)} className="accent-slate-900" /> SMA50</label>
-                          <label className="flex items-center gap-1.5"><input type="checkbox" checked={showSMA200} onChange={e=>setShowSMA200(e.target.checked)} className="accent-slate-900" /> SMA200</label>
-                          <label className="flex items-center gap-1.5"><input type="checkbox" checked={showBB} onChange={e=>setShowBB(e.target.checked)} className="accent-slate-900" /> Bollinger 20,2</label>
-                          <label className="flex items-center gap-1.5"><input type="checkbox" checked={showVol} onChange={e=>setShowVol(e.target.checked)} className="accent-slate-900" /> Volume</label>
-                          <label className="flex items-center gap-1.5"><input type="checkbox" checked={showRSI} onChange={e=>setShowRSI(e.target.checked)} className="accent-slate-900" /> RSI</label>
-                          <label className="flex items-center gap-1.5"><input type="checkbox" checked={showMACD} onChange={e=>setShowMACD(e.target.checked)} className="accent-slate-900" /> MACD</label>
-                        </div>
-                        <div className="mt-3 min-h-[28px] flex flex-wrap gap-3 text-[11px] mono bg-white border rounded-lg px-3 py-2">
-                          {hoverIdx !== null && chartData[hoverIdx] ? (
-                            <>
-                              <span className="font-medium">{chartData[hoverIdx].date}</span>
-                              <span>O {chartData[hoverIdx].open.toFixed(2)}</span>
-                              <span className="text-emerald-600">H {chartData[hoverIdx].high.toFixed(2)}</span>
-                              <span className="text-red-600">L {chartData[hoverIdx].low.toFixed(2)}</span>
-                              <span className="font-bold">C {chartData[hoverIdx].close.toFixed(2)}</span>
-                              <span className="text-slate-500">V {chartData[hoverIdx].volume.toLocaleString("it-IT")}</span>
-                              {indicators.rsi[hoverIdx] && <span className="text-indigo-600">RSI {indicators.rsi[hoverIdx].toFixed(1)}</span>}
-                            </>
-                          ) : (
-                            <span className="text-slate-500">Muovi il mouse sul grafico — crosshair sincronizzato • Verde close≥open, rosso altrimenti</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="bg-white">
-                        <canvas ref={priceRef} onMouseMove={handleMouseMove} onMouseLeave={()=>setHoverIdx(null)} style={{width:"100%", height:"360px", display:"block", touchAction:"none", cursor:"crosshair"}} />
-                        {showRSI && <div className="border-t"><canvas ref={rsiRef} onMouseMove={handleMouseMove} onMouseLeave={()=>setHoverIdx(null)} style={{width:"100%", height:"120px", display:"block", touchAction:"none", cursor:"crosshair"}} /></div>}
-                        {showMACD && <div className="border-t"><canvas ref={macdRef} onMouseMove={handleMouseMove} onMouseLeave={()=>setHoverIdx(null)} style={{width:"100%", height:"140px", display:"block", touchAction:"none", cursor:"crosshair"}} /></div>}
-                      </div>
-                      <div className="px-4 py-2 bg-slate-50 border-t flex flex-wrap gap-4 text-[10px] uppercase tracking-widest text-slate-500">
-                        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500 inline-block"></span> Rialzo</span>
-                        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-500 inline-block"></span> Ribasso</span>
-                        <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-sky-500 inline-block"></span> SMA20</span>
-                        <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-amber-500 inline-block"></span> SMA50</span>
-                        <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-violet-500 inline-block border-dashed"></span> SMA200</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </main>
-            </div>
+function renderDettaglio(){
+  const box = document.getElementById('dettaglio');
+  if(!selected){ box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  const c = selected.consenso;
+  const isBuy = c.rating==="Buy";
+  const isSell = c.rating==="Sell";
+  box.innerHTML = `
+    <div class="grid grid-cols-12 gap-3">
+      <div class="col-span-12 lg:col-span-8 bg-white border rounded-xl p-4">
+        <h3 class="text-xs font-semibold mb-3">${selected.ticker} — ${selected.nome} • Fondamentali</h3>
+        <div class="grid grid-cols-3 md:grid-cols-4 gap-2 text-[11px]">
+          ${[
+            ["Prezzo", selected.prezzo.toFixed(2)],
+            ["PE", selected.pe],
+            ["PB", selected.pb],
+            ["ROE %", selected.roe],
+            ["Div %", selected.divYield],
+            ["Debt/Eq", selected.debtEquity],
+            ["CET1 %", selected.cet1],
+            ["MktCap Mld", selected.marketCap],
+            ["ScoreF", selected.scoreF],
+            ["ScoreT", selected.scoreT],
+            ["ScoreTot", selected.scoreTot],
+          ].map(([k,v])=>`<div class="bg-slate-50 rounded-lg px-2.5 py-2"><div class="text-[10px] text-slate-500 uppercase">${k}</div><div class="font-semibold mono">${v ?? "—"}</div></div>`).join('')}
+        </div>
+        <div class="mt-4">
+          <canvas id="chart" width="800" height="360" style="width:100%;height:360px;border:1px solid #e2e8f0;border-radius:8px"></canvas>
+        </div>
+      </div>
+      <div class="col-span-12 lg:col-span-4 space-y-3">
+        <div class="bg-white border rounded-xl p-3">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-[11px] font-semibold">Consenso</span>
+            <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100">${c.numAnalysts||8} analisti</span>
           </div>
-        );
-      }
+          <div class="text-[11px] space-y-1.5">
+            <div class="flex justify-between items-center"><span>Rating</span><b class="px-2 py-0.5 rounded-full text-[10px] ${isBuy?'bg-emerald-500 text-white':isSell?'bg-red-500 text-white':'bg-amber-400 text-slate-900'}">${c.rating||"Hold"}</b></div>
+            <div class="flex justify-between"><span>Target (TP)</span><span class="mono font-medium">${(c.targetPrice||c.tp||0).toFixed(2)} €</span></div>
+            <div class="flex justify-between"><span>Low / High</span><span class="mono">${(c.lo||0).toFixed(2)} / ${(c.hi||0).toFixed(2)}</span></div>
+            <div class="flex justify-between"><span>Upside</span><span class="${(c.upside||0)>=0?'text-emerald-600':'text-red-600'} font-medium">${c.upside||0}%</span></div>
+            <div class="flex justify-between"><span>Buy/Hold/Sell</span><span class="mono">${c.buy||0}/${c.hold||0}/${c.sell||0}</span></div>
+          </div>
+          <div class="text-[9px] text-slate-400 mt-2">Fonte: collector.py (yfinance info.targetMeanPrice + recommendations) + fallback deterministico</div>
+        </div>
+        <div class="bg-white border rounded-xl p-3">
+          <div class="text-[11px] font-semibold mb-2">Score</div>
+          ${[["ScoreF",selected.scoreF],["ScoreT",selected.scoreT],["ScoreTot",selected.scoreTot]].map(([k,v])=>`
+            <div class="mb-2"><div class="flex justify-between text-[11px]"><span>${k}</span><span class="mono">${v}</span></div><div class="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-slate-900" style="width:${v}%"></div></div></div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+  setTimeout(()=>drawChart(),50);
+}
 
-      function drawPrice(canvas, data, ind, opts) {
-        if (!canvas) return;
-        const ctx = canvas.getContext("2d");
-        const dpr = window.devicePixelRatio || 1;
-        const w = canvas.clientWidth, h = canvas.clientHeight;
-        canvas.width = w * dpr; canvas.height = h * dpr;
-        ctx.setTransform(dpr,0,0,dpr,0,0);
-        ctx.clearRect(0,0,w,h);
-        if (!data.length) return;
-        const highs = data.map(d=>d.high), lows = data.map(d=>d.low);
-        let min = Math.min(...lows), max = Math.max(...highs);
-        const pad = (max-min)*0.12; min-=pad; max+=pad;
-        const xStep = w / data.length;
-        const y = v => h - ((v-min)/(max-min))*h;
-        if (opts.showBB) {
-          ctx.fillStyle = "rgba(99,102,241,0.07)";
-          ctx.beginPath(); let s=false;
-          for (let i=0;i<data.length;i++) if (ind.bb.upper[i]!==null) { if(!s){ctx.moveTo(i*xStep, y(ind.bb.upper[i])); s=true;} else ctx.lineTo(i*xStep, y(ind.bb.upper[i])); }
-          for (let i=data.length-1;i>=0;i--) if (ind.bb.lower[i]!==null) ctx.lineTo(i*xStep, y(ind.bb.lower[i]));
-          ctx.closePath(); ctx.fill();
-        }
-        data.forEach((bar,i)=>{
-          const x = i*xStep + xStep*0.15; const bw = xStep*0.7;
-          const isUp = bar.close >= bar.open;
-          ctx.fillStyle = isUp ? "#10b981" : "#ef4444"; ctx.strokeStyle = isUp ? "#10b981" : "#ef4444";
-          ctx.beginPath(); ctx.moveTo(x+bw/2, y(bar.high)); ctx.lineTo(x+bw/2, y(bar.low)); ctx.stroke();
-          const top = y(Math.max(bar.open, bar.close)); const bh = Math.max(1, Math.abs(y(bar.open)-y(bar.close)));
-          ctx.fillRect(x, top, bw, bh);
-          if (opts.showVol) {
-            const volMax = Math.max(...data.map(d=>d.volume)); const vh = (bar.volume / volMax) * h * 0.18;
-            ctx.globalAlpha = 0.25; ctx.fillRect(x, h - vh, bw, vh); ctx.globalAlpha = 1;
-          }
-        });
-        function drawLine(arr,color,dash){ ctx.strokeStyle=color; ctx.lineWidth=1; ctx.setLineDash(dash||[]); ctx.beginPath(); let s=false; arr.forEach((v,i)=>{ if(v===null) return; const xx=i*xStep+xStep/2; if(!s){ctx.moveTo(xx,y(v)); s=true;} else ctx.lineTo(xx,y(v)); }); ctx.stroke(); ctx.setLineDash([]); }
-        if (opts.showSMA20) drawLine(ind.sma20, "#0ea5e9");
-        if (opts.showSMA50) drawLine(ind.sma50, "#f59e0b");
-        if (opts.showSMA200) drawLine(ind.sma200, "#8b5cf6", [4,4]);
-        if (opts.showBB) { drawLine(ind.bb.upper, "#6366f1", [4,4]); drawLine(ind.bb.lower, "#6366f1", [4,4]); }
-        if (opts.hoverIdx!==null){ const x=opts.hoverIdx*xStep+xStep/2; ctx.strokeStyle="rgba(0,0,0,0.18)"; ctx.setLineDash([3,3]); ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); ctx.setLineDash([]); }
-      }
+function drawChart(){
+  const canvas = document.getElementById('chart');
+  if(!canvas || !selected) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio||1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w*dpr; canvas.height = h*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+  const data = selected.history;
+  if(!data.length) return;
+  const highs = data.map(d=>d.high), lows = data.map(d=>d.low);
+  let min = Math.min(...lows), max = Math.max(...highs);
+  const pad=(max-min)*0.12; min-=pad; max+=pad;
+  const xStep = w / data.length;
+  const y = v=> h - ((v-min)/(max-min))*h;
+  // candele
+  data.forEach((bar,i)=>{
+    const x=i*xStep + xStep*0.15; const bw=xStep*0.7;
+    const isUp=bar.close>=bar.open;
+    ctx.fillStyle=isUp?"#10b981":"#ef4444"; ctx.strokeStyle=isUp?"#10b981":"#ef4444";
+    ctx.beginPath(); ctx.moveTo(x+bw/2, y(bar.high)); ctx.lineTo(x+bw/2, y(bar.low)); ctx.stroke();
+    const top=y(Math.max(bar.open,bar.close)); const bh=Math.max(1, Math.abs(y(bar.open)-y(bar.close)));
+    ctx.fillRect(x,top,bw,bh);
+  });
+  // SMA50
+  const closes=data.map(d=>d.close);
+  const sma50=calcSMA(closes,50);
+  ctx.strokeStyle="#f59e0b"; ctx.lineWidth=1; ctx.beginPath(); let started=false;
+  sma50.forEach((v,i)=>{ if(v===null) return; const xx=i*xStep+xStep/2; if(!started){ctx.moveTo(xx,y(v)); started=true;} else ctx.lineTo(xx,y(v)); }); ctx.stroke();
+}
 
-      function drawRSI(canvas, rsi, hoverIdx){
-        if(!canvas) return;
-        const ctx=canvas.getContext("2d"); const dpr=window.devicePixelRatio||1;
-        const w=canvas.clientWidth, h=canvas.clientHeight; canvas.width=w*dpr; canvas.height=h*dpr; ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
-        ctx.strokeStyle="#e2e8f0"; ctx.setLineDash([4,4]); [30,70].forEach(v=>{ const yy=h-(v/100)*h; ctx.beginPath(); ctx.moveTo(0,yy); ctx.lineTo(w,yy); ctx.stroke(); }); ctx.setLineDash([]);
-        const xStep=w/rsi.length; ctx.strokeStyle="#6366f1"; ctx.lineWidth=1.2; ctx.beginPath(); let s=false; rsi.forEach((v,i)=>{ if(v===null) return; const xx=i*xStep+xStep/2; const yy=h-(v/100)*h; if(!s){ctx.moveTo(xx,yy); s=true;} else ctx.lineTo(xx,yy); }); ctx.stroke();
-        if(hoverIdx!==null){ const x=hoverIdx*xStep+xStep/2; ctx.strokeStyle="rgba(0,0,0,0.18)"; ctx.setLineDash([3,3]); ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); ctx.setLineDash([]); }
-      }
+document.getElementById('filtroTesto').addEventListener('input', render);
+document.getElementById('filtroSettore').addEventListener('change', render);
+document.getElementById('btnReload').addEventListener('click', ()=>{ fetchSnapshot(); });
 
-      function drawMACD(canvas, macd, hoverIdx){
-        if(!canvas) return;
-        const ctx=canvas.getContext("2d"); const dpr=window.devicePixelRatio||1;
-        const w=canvas.clientWidth, h=canvas.clientHeight; canvas.width=w*dpr; canvas.height=h*dpr; ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
-        const all=[...macd.macdLine.filter(v=>v!==null),...macd.signalLine.filter(v=>v!==null),...macd.histogram.filter(v=>v!==null)];
-        if(!all.length) return; let min=Math.min(...all), max=Math.max(...all); const pad=(max-min)*0.15||1; min-=pad; max+=pad;
-        const y=v=>h-((v-min)/(max-min))*h; const xStep=w/macd.macdLine.length; const zeroY=y(0);
-        ctx.strokeStyle="#e2e8f0"; ctx.beginPath(); ctx.moveTo(0,zeroY); ctx.lineTo(w,zeroY); ctx.stroke();
-        macd.histogram.forEach((v,i)=>{ if(v===null) return; const x=i*xStep+xStep*0.2; const bw=xStep*0.6; const top=y(Math.max(0,v)); const bh=Math.abs(y(v)-zeroY); ctx.fillStyle=v>=0?"#10b981":"#ef4444"; ctx.fillRect(x,top,bw,bh); });
-        function line(arr,color){ ctx.strokeStyle=color; ctx.lineWidth=1; ctx.beginPath(); let s=false; arr.forEach((v,i)=>{ if(v===null) return; const xx=i*xStep+xStep/2; if(!s){ctx.moveTo(xx,y(v)); s=true;} else ctx.lineTo(xx,y(v)); }); ctx.stroke(); }
-        line(macd.macdLine,"#0ea5e9"); line(macd.signalLine,"#f59e0b");
-        if(hoverIdx!==null){ const x=hoverIdx*xStep+xStep/2; ctx.strokeStyle="rgba(0,0,0,0.18)"; ctx.setLineDash([3,3]); ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); ctx.setLineDash([]); }
-      }
-
-      const root = ReactDOM.createRoot(document.getElementById("root"));
-      root.render(<App />);
-    </script>
-  <script>(function(){var loc=location.href.replace(/#.*$/,"");var ATTR_NAMES=["data-product-id","data-productid","data-product_id","product-id","productid","product_id","data-source-entity-id","source-entity-id","source_entity_id","data-product","data-metadata","data-meta"];var DATASET_KEYS=["productId","productid","product_id","sourceEntityId","sourceentityid","source_entity_id","product","metadata","meta"];function readProductId(value){if(typeof value!=="string"||value.length===0)return null;if(/^[0-9]{6,}$/.test(value))return value;var match=value.match(/(?:product(?:_|-)?id|source(?:_|-)?entity(?:_|-)?id)["'=:\s]+([0-9]{6,})/i);return match?match[1]:null}function extractProductId(start){for(var node=start;node&&node!==document.body;node=node.parentElement){for(var i=0;i<ATTR_NAMES.length;i++){var attrValue=node.getAttribute&&node.getAttribute(ATTR_NAMES[i]);var attrProductId=readProductId(attrValue);if(attrProductId)return attrProductId}var dataset=node.dataset||null;if(dataset){for(var j=0;j<DATASET_KEYS.length;j++){var dataValue=dataset[DATASET_KEYS[j]];var dataProductId=readProductId(dataValue);if(dataProductId)return dataProductId}}}return null}function isInlineMediaSlotElement(node){return !!(node&&node.getAttribute&&node.getAttribute("data-clippy-inline-media-slot")!==null)}function findInlineMediaSlot(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(isInlineMediaSlotElement(node))return node}return null}function readInlineMediaUrl(node){if(!node)return null;return node.getAttribute&&((node.getAttribute("data-clippy-inline-media-url")||node.getAttribute("data-url")||node.getAttribute("data_url")))||node.href||null}function stripHash(url){return String(url).replace(/#.*$/,"")}function urlsMatch(a,b){if(!a||!b)return false;try{return stripHash(new URL(a,loc).href)===stripHash(new URL(b,loc).href)}catch(_){return stripHash(a)===stripHash(b)}}function isFirstPartyReelUrl(value){try{var url=new URL(value,loc);if(url.protocol!=="https:")return false;var host=url.hostname.toLowerCase();var supported=host==="instagram.com"||host.endsWith(".instagram.com")||host==="facebook.com"||host.endsWith(".facebook.com");return supported&&/\/reels?\//i.test(url.pathname)}catch(_){return false}}function isInlineMediaUrlClick(node,href){var slot=findInlineMediaSlot(node);if(!slot)return false;var slotUrl=readInlineMediaUrl(slot);if(slotUrl)return urlsMatch(href,slotUrl);return isFirstPartyReelUrl(href)}function findDataHref(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(node.getAttribute){var href=node.getAttribute("data-href")||node.getAttribute("data-url");if(href)return{href:href,node:node}}}return null}var nativeOpen=window.open;window.open=function(url){if(parent!==window&&typeof url==="string"&&/^https?:\/\//.test(url)){parent.postMessage({type:"ecto:usercontent-link-click",href:url},"*");return null}return nativeOpen?nativeOpen.apply(window,arguments):null};document.addEventListener("click",function(e){var target=e.target instanceof Element?e.target:null;if(!target)return;if(parent===window)return;var a=target.closest?target.closest("a[href]"):null;if(a&&a.href&&/^https?:\/\//.test(a.href)&&a.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(a,a.href))return;var productId=extractProductId(target)||extractProductId(a);if(productId){e.preventDefault();parent.postMessage({type:"ecto-artifact-link-click",productId:productId},"*");return}e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:a.href},"*");return}var dataHref=findDataHref(target);if(dataHref&&/^https?:\/\//.test(dataHref.href)&&dataHref.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(dataHref.node,dataHref.href))return;e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:dataHref.href},"*")}},true)})();</script><script>(function(){var FOCUS_TYPE="ecto:artifact-focus-request";var CLOSE_TYPE="ecto:artifact-close-request";function focusArtifactDocument(){var body=document.body;if(!body)return;try{window.focus();}catch(e){}if(!body.hasAttribute("tabindex"))body.setAttribute("tabindex","-1");try{body.focus({preventScroll:true});}catch(e){try{body.focus();}catch(e2){}}}window.addEventListener("message",function(event){if(event.source!==window.parent)return;var data=event.data;if(!data||typeof data!=="object"||data.type!==FOCUS_TYPE)return;if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",focusArtifactDocument,{once:true});return;}focusArtifactDocument();});window.addEventListener("keydown",function(event){if(event.key!=="Escape")return;window.setTimeout(function(){if(event.defaultPrevented)return;window.parent.postMessage({type:CLOSE_TYPE},"*");},0);});})();</script></body>
+fetchSnapshot().catch(e=>{
+  document.getElementById('statusBadge').textContent="Errore";
+  document.getElementById('statusBadge').className="text-[11px] bg-red-50 text-red-700 border rounded-full px-3 py-1";
+  log("✗ Errore finale: "+e.message);
+  log("Verifica che collector.py abbia generato dati/snapshot.json e che sia pushato su main");
+});
+</script>
+<script>(function(){var loc=location.href.replace(/#.*$/,"");var ATTR_NAMES=["data-product-id","data-productid","data-product_id","product-id","productid","product_id","data-source-entity-id","source-entity-id","source_entity_id","data-product","data-metadata","data-meta"];var DATASET_KEYS=["productId","productid","product_id","sourceEntityId","sourceentityid","source_entity_id","product","metadata","meta"];function readProductId(value){if(typeof value!=="string"||value.length===0)return null;if(/^[0-9]{6,}$/.test(value))return value;var match=value.match(/(?:product(?:_|-)?id|source(?:_|-)?entity(?:_|-)?id)["'=:\s]+([0-9]{6,})/i);return match?match[1]:null}function extractProductId(start){for(var node=start;node&&node!==document.body;node=node.parentElement){for(var i=0;i<ATTR_NAMES.length;i++){var attrValue=node.getAttribute&&node.getAttribute(ATTR_NAMES[i]);var attrProductId=readProductId(attrValue);if(attrProductId)return attrProductId}var dataset=node.dataset||null;if(dataset){for(var j=0;j<DATASET_KEYS.length;j++){var dataValue=dataset[DATASET_KEYS[j]];var dataProductId=readProductId(dataValue);if(dataProductId)return dataProductId}}}return null}function isInlineMediaSlotElement(node){return !!(node&&node.getAttribute&&node.getAttribute("data-clippy-inline-media-slot")!==null)}function findInlineMediaSlot(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(isInlineMediaSlotElement(node))return node}return null}function readInlineMediaUrl(node){if(!node)return null;return node.getAttribute&&((node.getAttribute("data-clippy-inline-media-url")||node.getAttribute("data-url")||node.getAttribute("data_url")))||node.href||null}function stripHash(url){return String(url).replace(/#.*$/,"")}function urlsMatch(a,b){if(!a||!b)return false;try{return stripHash(new URL(a,loc).href)===stripHash(new URL(b,loc).href)}catch(_){return stripHash(a)===stripHash(b)}}function isFirstPartyReelUrl(value){try{var url=new URL(value,loc);if(url.protocol!=="https:")return false;var host=url.hostname.toLowerCase();var supported=host==="instagram.com"||host.endsWith(".instagram.com")||host==="facebook.com"||host.endsWith(".facebook.com");return supported&&/\/reels?\//i.test(url.pathname)}catch(_){return false}}function isInlineMediaUrlClick(node,href){var slot=findInlineMediaSlot(node);if(!slot)return false;var slotUrl=readInlineMediaUrl(slot);if(slotUrl)return urlsMatch(href,slotUrl);return isFirstPartyReelUrl(href)}function findDataHref(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(node.getAttribute){var href=node.getAttribute("data-href")||node.getAttribute("data-url");if(href)return{href:href,node:node}}}return null}var nativeOpen=window.open;window.open=function(url){if(parent!==window&&typeof url==="string"&&/^https?:\/\//.test(url)){parent.postMessage({type:"ecto:usercontent-link-click",href:url},"*");return null}return nativeOpen?nativeOpen.apply(window,arguments):null};document.addEventListener("click",function(e){var target=e.target instanceof Element?e.target:null;if(!target)return;if(parent===window)return;var a=target.closest?target.closest("a[href]"):null;if(a&&a.href&&/^https?:\/\//.test(a.href)&&a.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(a,a.href))return;var productId=extractProductId(target)||extractProductId(a);if(productId){e.preventDefault();parent.postMessage({type:"ecto-artifact-link-click",productId:productId},"*");return}e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:a.href},"*");return}var dataHref=findDataHref(target);if(dataHref&&/^https?:\/\//.test(dataHref.href)&&dataHref.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(dataHref.node,dataHref.href))return;e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:dataHref.href},"*")}},true)})();</script><script>(function(){var FOCUS_TYPE="ecto:artifact-focus-request";var CLOSE_TYPE="ecto:artifact-close-request";function focusArtifactDocument(){var body=document.body;if(!body)return;try{window.focus();}catch(e){}if(!body.hasAttribute("tabindex"))body.setAttribute("tabindex","-1");try{body.focus({preventScroll:true});}catch(e){try{body.focus();}catch(e2){}}}window.addEventListener("message",function(event){if(event.source!==window.parent)return;var data=event.data;if(!data||typeof data!=="object"||data.type!==FOCUS_TYPE)return;if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",focusArtifactDocument,{once:true});return;}focusArtifactDocument();});window.addEventListener("keydown",function(event){if(event.key!=="Escape")return;window.setTimeout(function(){if(event.defaultPrevented)return;window.parent.postMessage({type:CLOSE_TYPE},"*");},0);});})();</script></body>
 </html>
