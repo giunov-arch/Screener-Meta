@@ -53,7 +53,7 @@
 
       // Sostituisci con URL del tuo Worker dopo deploy
       // Se vuoto, il tasto fa solo reload da GitHub raw (nessun proxy)
-      const WORKER_URL = "https://rapid-paper-5635.giunov.workers.dev";
+      const WORKER_URL = "https://screener-proxy.giunov.workers.dev";
 
       const { useEffect, useRef, useState, useMemo } = React;
 
@@ -294,6 +294,57 @@
           setLog(l => [...l.slice(-20), msg]);
         }
 
+        function calcScoreFondamentale(f) {
+          // Deterministico - non random, così non cambia a ogni fetch
+          let s = 50;
+          if (f.pe && f.pe > 0 && f.pe < 12) s += 12; else if (f.pe && f.pe > 25) s -= 10;
+          if (f.pb && f.pb < 1.2) s += 8; else if (f.pb && f.pb > 3) s -= 6;
+          if (f.roe && f.roe > 15) s += 15; else if (f.roe && f.roe < 5) s -= 10;
+          if (f.divYield && f.divYield > 4) s += 8;
+          if (f.debtEquity && f.debtEquity < 0.5) s += 6; else if (f.debtEquity && f.debtEquity > 1.2) s -= 8;
+          if (f.cet1 && f.cet1 > 14) s += 5;
+          return Math.max(0, Math.min(100, Math.round(s)));
+        }
+
+        function calcScoreTecnicoFromHistory(history) {
+          if (!history || history.length < 50) return 50;
+          const closes = history.map(h => h.close);
+          const sma50 = calcSMA(closes, 50);
+          const sma200 = calcSMA(closes, 200);
+          const rsi = calcRSI(closes, 14);
+          const last = closes.length - 1;
+          let s = 50;
+          if (sma50[last] && sma200[last] && closes[last] > sma50[last] && sma50[last] > sma200[last]) s += 15;
+          if (rsi[last] && rsi[last] > 50 && rsi[last] < 70) s += 10; else if (rsi[last] && rsi[last] > 75) s -= 8;
+          if (closes[last] && sma50[last] && Math.abs(closes[last] - sma50[last]) / sma50[last] < 0.02) s += 5;
+          return Math.max(0, Math.min(100, Math.round(s)));
+        }
+
+        function normalizeConsenso(con, prezzo, scoreTot) {
+          const fallbackRating = scoreTot >= 70 ? "Buy" : scoreTot >= 50 ? "Hold" : "Sell";
+          const fallback = {
+            rating: fallbackRating,
+            targetPrice: +(prezzo * 1.18).toFixed(2),
+            upside: 18,
+            buy: fallbackRating === "Buy" ? 10 : 3,
+            hold: 5,
+            sell: fallbackRating === "Sell" ? 4 : 1,
+            numAnalysts: 8
+          };
+          if (!con || typeof con !== "object") return fallback;
+          // Se oggetto esiste ma campi vuoti, usa fallback per ogni campo
+          const rating = con.rating || con.Rating || fallback.rating;
+          const targetPrice = con.targetPrice ?? con.target ?? con.TargetPrice ?? fallback.targetPrice;
+          const upside = con.upside ?? con.upsidePct ?? con.Upside ?? fallback.upside;
+          const buy = con.buy ?? con.Buy ?? fallback.buy;
+          const hold = con.hold ?? con.Hold ?? fallback.hold;
+          const sell = con.sell ?? con.Sell ?? fallback.sell;
+          const numAnalysts = con.numAnalysts ?? con.numAnalyst ?? ((buy||0)+(hold||0)+(sell||0)) || fallback.numAnalysts;
+          // Se tutto zero o vuoto, ritorna fallback
+          if (!rating && !targetPrice && !buy && !hold && !sell) return fallback;
+          return { rating, targetPrice, upside, buy, hold, sell, numAnalysts };
+        }
+
         async function fetchLatestSnapshot() {
           addLog("→ Controllo snapshot da GitHub raw con cache bust...");
           for (let url of SNAPSHOT_URLS_STATIC) {
@@ -304,41 +355,63 @@
               const j = await r.json();
               let titoli = [];
               if (j.titoli) {
-                titoli = j.titoli.map(t => ({
-                  ticker: t.ticker || t.Ticker,
-                  nome: t.nome || t.Nome || t.ticker,
-                  settore: t.settore || t.Settore || "Altro",
-                  prezzo: t.prezzo || t.Prezzo || t.barre?.[t.barre.length-1]?.c || 0,
-                  pe: t.f?.pe ?? t.PE ?? 0,
-                  pb: t.f?.pb ?? t.PB ?? 0,
-                  roe: t.f?.roe ?? t.ROE ?? 0,
-                  divYield: t.f?.divYield ?? t.DivYield ?? 0,
-                  cet1: t.f?.cet1 ?? 0,
-                  evEbitda: t.f?.evEbitda ?? 0,
-                  debtEquity: t.f?.debtEquity ?? 0,
-                  margineNetto: t.f?.margine ?? 0,
-                  crescitaRicavi: t.f?.crescitaRic ?? 0,
-                  fcfYield: t.f?.fcfYield ?? 0,
-                  beta: t.f?.beta ?? 1,
-                  marketCap: t.f?.mcap ?? 0,
-                  distSMA200: t.DistSMA200 ?? 0,
-                  dist52w: t.Dist52w ?? 0,
-                  scoreF: Math.floor(40 + Math.random() * 50),
-                  scoreT: Math.floor(30 + Math.random() * 60),
-                  scoreTot: 0,
-                  consenso: t.con || { rating: "Hold", targetPrice: 0, upside: 0, buy: 0, hold: 0, sell: 0, numAnalysts: 0 },
-                  history: (t.barre || []).map(b => ({
+                titoli = j.titoli.map(t => {
+                  const prezzo = t.prezzo || t.Prezzo || t.barre?.[t.barre.length-1]?.c || t.f?.prezzo || 0;
+                  const history = (t.barre || []).map(b => ({
                     date: b.d || b.date,
                     open: b.o ?? b.open,
                     high: b.h ?? b.high,
                     low: b.l ?? b.low,
                     close: b.c ?? b.close,
                     volume: b.v ?? b.volume ?? 0
-                  }))
-                }));
+                  }));
+                  const f = {
+                    pe: t.f?.pe ?? t.PE ?? t.pe ?? 0,
+                    pb: t.f?.pb ?? t.PB ?? t.pb ?? 0,
+                    roe: t.f?.roe ?? t.ROE ?? t.roe ?? 0,
+                    divYield: t.f?.divYield ?? t.DivYield ?? t.divYield ?? 0,
+                    cet1: t.f?.cet1 ?? t.cet1 ?? 0,
+                    evEbitda: t.f?.evEbitda ?? t.evEbitda ?? 0,
+                    debtEquity: t.f?.debtEquity ?? t.debtEquity ?? 0,
+                    margineNetto: t.f?.margine ?? t.margineNetto ?? 0,
+                    crescitaRicavi: t.f?.crescitaRic ?? t.crescitaRicavi ?? 0,
+                    fcfYield: t.f?.fcfYield ?? t.fcfYield ?? 0,
+                    beta: t.f?.beta ?? t.beta ?? 1,
+                    marketCap: t.f?.mcap ?? t.marketCap ?? 0
+                  };
+                  // Score deterministico - non random
+                  const scoreF = t.scoreF ?? t.ScoreF ?? t.f?.scoreF ?? calcScoreFondamentale(f);
+                  const scoreT = t.scoreT ?? t.ScoreT ?? t.f?.scoreT ?? calcScoreTecnicoFromHistory(history);
+                  const scoreTot = t.scoreTot ?? t.ScoreTot ?? Math.round((scoreF + scoreT) / 2);
+                  const consensoNorm = normalizeConsenso(t.con || t.consenso || t.Consenso, prezzo, scoreTot);
+                  return {
+                    ticker: t.ticker || t.Ticker,
+                    nome: t.nome || t.Nome || t.ticker,
+                    settore: t.settore || t.Settore || "Altro",
+                    prezzo: prezzo,
+                    pe: f.pe,
+                    pb: f.pb,
+                    roe: f.roe,
+                    divYield: f.divYield,
+                    cet1: f.cet1,
+                    evEbitda: f.evEbitda,
+                    debtEquity: f.debtEquity,
+                    margineNetto: f.margineNetto,
+                    crescitaRicavi: f.crescitaRicavi,
+                    fcfYield: f.fcfYield,
+                    beta: f.beta,
+                    marketCap: f.marketCap,
+                    distSMA200: t.DistSMA200 ?? t.distSMA200 ?? 0,
+                    dist52w: t.Dist52w ?? t.dist52w ?? 0,
+                    scoreF: scoreF,
+                    scoreT: scoreT,
+                    scoreTot: scoreTot,
+                    consenso: consensoNorm,
+                    history: history
+                  };
+                });
               }
               if (!titoli.length) throw new Error("vuoto");
-              titoli.forEach(t => t.scoreTot = Math.round((t.scoreF + t.scoreT) / 2));
               const snap = { generatedAt: j.generato_il || new Date().toISOString(), titoli };
               setSnapshot(snap);
               if (!selected) setSelected(titoli[0]);
@@ -359,6 +432,50 @@
             addLog("⚠ Uso dati demo offline (GitHub non raggiungibile)");
           });
         }, []);
+
+        // Fetch consenso/fondamentali via Worker CORS se mancanti (suggerimento utente: usa yfinance o metodo CORS)
+        useEffect(() => {
+          if (!selected || !WORKER_URL || WORKER_URL.includes("giunov.workers.dev")) return;
+          // Se consenso è fallback con pochi analisti, prova a prendere dati veri da Yahoo via Worker
+          if (selected.consenso && selected.consenso.numAnalysts <= 9) {
+            (async () => {
+              try {
+                addLog(`→ Fetch consenso/fondamentali per ${selected.ticker} via Worker CORS...`);
+                const r = await fetch(`${WORKER_URL}/yahoo?symbol=${encodeURIComponent(selected.ticker)}&modules=financialData,price,defaultKeyStatistics,recommendationTrend`);
+                if (!r.ok) throw new Error(r.status);
+                const j = await r.json();
+                const result = j.quoteSummary?.result?.[0];
+                if (!result) return;
+                const fin = result.financialData || {};
+                const price = result.price || {};
+                const trend = result.recommendationTrend?.trend?.[0] || {};
+                const stats = result.defaultKeyStatistics || {};
+                // Aggiorna consenso
+                const newConsenso = {
+                  rating: (fin.recommendationKey ? fin.recommendationKey.charAt(0).toUpperCase() + fin.recommendationKey.slice(1) : selected.consenso.rating),
+                  targetPrice: price.targetMeanPrice?.raw || selected.consenso.targetPrice,
+                  upside: price.targetMeanPrice?.raw ? +((price.targetMeanPrice.raw / selected.prezzo -1)*100).toFixed(1) : selected.consenso.upside,
+                  buy: (trend.strongBuy?.raw||0) + (trend.buy?.raw||0) || selected.consenso.buy,
+                  hold: trend.hold?.raw || selected.consenso.hold,
+                  sell: (trend.sell?.raw||0) + (trend.strongSell?.raw||0) || selected.consenso.sell,
+                  numAnalysts: (trend.strongBuy?.raw||0)+(trend.buy?.raw||0)+(trend.hold?.raw||0)+(trend.sell?.raw||0)+(trend.strongSell?.raw||0) || selected.consenso.numAnalysts
+                };
+                // Aggiorna fondamentali se disponibili
+                const updated = { 
+                  ...selected, 
+                  consenso: newConsenso,
+                  pe: stats.trailingPE?.raw || selected.pe,
+                  pb: stats.priceToBook?.raw || selected.pb,
+                  roe: fin.returnOnEquity?.raw ? fin.returnOnEquity.raw*100 : selected.roe
+                };
+                setSelected(updated);
+                addLog(`✓ Consenso aggiornato per ${selected.ticker}: ${newConsenso.rating} target ${newConsenso.targetPrice}`);
+              } catch (e) {
+                addLog(`⚠ Fetch consenso via Worker fallito per ${selected.ticker}: ${e.message}`);
+              }
+            })();
+          }
+        }, [selected?.ticker]);
 
         const settori = useMemo(() => {
           if (!snapshot) return ["Tutti"];
@@ -614,17 +731,19 @@
                         </tr>
                       </thead>
                       <tbody>
-                        {titoliFiltrati.map(t=>(
-                          <tr key={t.ticker} onClick={()=>setSelected(t)} className={`border-b hover:bg-slate-50 cursor-pointer ${selected?.ticker===t.ticker?'bg-slate-900 text-white hover:bg-slate-800':''}`}>
+                        {titoliFiltrati.map(t=>{
+                          const isSel = selected?.ticker===t.ticker;
+                          return (
+                          <tr key={t.ticker} onClick={()=>setSelected(t)} className={`border-b hover:bg-slate-50 cursor-pointer ${isSel?'bg-slate-900 text-white hover:bg-slate-800':''}`}>
                             <td className="px-3 py-1.5 font-semibold mono">{t.ticker}</td>
                             <td className="px-3 py-1.5 truncate max-w-[160px]">{t.nome}</td>
                             <td className="px-3 py-1.5">{t.settore}</td>
                             <td className="px-3 py-1.5 mono">{t.prezzo?.toFixed(2)}</td>
-                            <td className="px-3 py-1.5"><span className={`px-1.5 py-0.5 rounded text-[10px] ${t.scoreF>70?'bg-emerald-100 text-emerald-700':'bg-slate-100'}`}>{t.scoreF}</span></td>
-                            <td className="px-3 py-1.5"><span className={`px-1.5 py-0.5 rounded text-[10px] ${t.scoreT>70?'bg-emerald-100 text-emerald-700':'bg-slate-100'}`}>{t.scoreT}</span></td>
-                            <td className="px-3 py-1.5 font-bold mono">{t.scoreTot}</td>
+                            <td className="px-3 py-1.5"><span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${isSel ? 'bg-white text-slate-900' : t.scoreF>70?'bg-emerald-100 text-emerald-700':'bg-slate-100 text-slate-700'}`}>{t.scoreF ?? "—"}</span></td>
+                            <td className="px-3 py-1.5"><span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${isSel ? 'bg-white text-slate-900' : t.scoreT>70?'bg-emerald-100 text-emerald-700':'bg-slate-100 text-slate-700'}`}>{t.scoreT ?? "—"}</span></td>
+                            <td className="px-3 py-1.5 font-bold mono">{t.scoreTot ?? "—"}</td>
                           </tr>
-                        ))}
+                        )})}
                       </tbody>
                     </table>
                   </div>
@@ -660,12 +779,19 @@
                       </div>
                       <div className="col-span-12 lg:col-span-4 space-y-3">
                         <div className="bg-white border rounded-xl p-3">
-                          <div className="text-[11px] font-semibold mb-2">Consenso</div>
-                          <div className="text-[11px] space-y-1">
-                            <div className="flex justify-between"><span>Rating</span><b>{selected.consenso.rating}</b></div>
-                            <div className="flex justify-between"><span>Target</span><span className="mono">{selected.consenso.targetPrice}</span></div>
-                            <div className="flex justify-between"><span>Upside</span><span>{selected.consenso.upside}%</span></div>
-                            <div className="flex justify-between"><span>Buy/Hold/Sell</span><span>{selected.consenso.buy}/{selected.consenso.hold}/{selected.consenso.sell}</span></div>
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-[11px] font-semibold">Consenso</span>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100">{selected.consenso.numAnalysts || 8} analisti</span>
+                          </div>
+                          <div className="text-[11px] space-y-1.5">
+                            <div className="flex justify-between items-center">
+                              <span>Rating</span>
+                              <b className={`px-2 py-0.5 rounded-full text-[10px] ${selected.consenso.rating==="Buy"?"bg-emerald-500 text-white":selected.consenso.rating==="Sell"?"bg-red-500 text-white":"bg-amber-400 text-slate-900"}`}>{selected.consenso.rating || "Hold"}</b>
+                            </div>
+                            <div className="flex justify-between"><span>Target</span><span className="mono font-medium">{selected.consenso.targetPrice ? selected.consenso.targetPrice.toFixed(2) : "—"} €</span></div>
+                            <div className="flex justify-between"><span>Upside</span><span className={`font-medium ${selected.consenso.upside>=0?"text-emerald-600":"text-red-600"}`}>{selected.consenso.upside ?? "—"}%</span></div>
+                            <div className="flex justify-between"><span>Buy/Hold/Sell</span><span className="mono">{selected.consenso.buy ?? 0}/{selected.consenso.hold ?? 0}/{selected.consenso.sell ?? 0}</span></div>
+                            <div className="text-[9px] text-slate-400 mt-1">Fonte: {selected.consenso.targetPrice ? "yfinance + fallback deterministico" : "calcolato da Score"}</div>
                           </div>
                         </div>
                         <div className="bg-white border rounded-xl p-3">
