@@ -77,6 +77,7 @@
 
 <script>
 // Fix pagina bianca: niente Babel, solo vanilla JS
+const WORKER_URL = "https://rapid-paper-5635.giunov.workers.dev";
 const SNAPSHOT_URLS = [
   "./dati/snapshot.json",
   "https://raw.githubusercontent.com/giunov-arch/Screener-Meta/main/dati/snapshot.json"
@@ -364,7 +365,30 @@ function drawChart(){
 
 document.getElementById('filtroTesto').addEventListener('input', render);
 document.getElementById('filtroSettore').addEventListener('change', render);
-document.getElementById('btnReload').addEventListener('click', ()=>{ fetchSnapshot(); });
+document.getElementById('btnReload').addEventListener('click', async ()=>{
+  const btn = document.getElementById('btnReload');
+  btn.textContent = "⏳ Aggiorno...";
+  btn.disabled = true;
+  try{
+    if(WORKER_URL){
+      log("→ Trigger workflow via Worker " + WORKER_URL + "...");
+      const r = await fetch(WORKER_URL, {method:"POST"});
+      if(r.ok){
+        const j = await r.json();
+        log("✓ Workflow lanciato (status "+j.status+") - polling tra 30s...");
+        setTimeout(()=>fetchSnapshot().then(()=>{btn.textContent="🔄 Aggiorna"; btn.disabled=false;}), 30000);
+        return;
+      }else{
+        log("⚠ Worker risponde "+r.status+", faccio solo reload raw");
+      }
+    }
+  }catch(e){
+    log("⚠ Worker errore: "+e.message+", faccio solo reload");
+  }
+  await fetchSnapshot();
+  btn.textContent="🔄 Aggiorna";
+  btn.disabled=false;
+});
 
 fetchSnapshot().catch(e=>{
   document.getElementById('statusBadge').textContent="Errore";
