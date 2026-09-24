@@ -25,31 +25,22 @@ jobs:
       - name: Install deps
         run: |
           pip install yfinance==0.2.40 pandas==2.2.3 numpy==1.26.4 requests curl-cffi==0.7.1
-          # yfinance 0.2.40 + curl_cffi 0.7.1 funziona, 0.2.54 no (bug 'str has no attribute name')
 
-      - name: Run collector (quello che funzionava)
+      - name: Run collector finale (bypass diretto Yahoo chart API)
         run: |
-          set -x
-          if [ -f collector.py ]; then
-            echo "Uso collector.py in root"
-            python collector.py
-          elif [ -f github-screener-italia/collector.py ]; then
-            python github-screener-italia/collector.py
-          else
-            python fetcher.py
-          fi
+          python collector.py
           ls -lh dati/ data/ 2>/dev/null || true
 
       - name: Commit e push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f dati/snapshot.json data/snapshot.json data/italian_stocks.json data/italian_stocks.csv data/last_update.json 2>/dev/null || true
-          git add -f dati/ data/ 2>/dev/null || true
+          git add -f dati/snapshot.json data/snapshot.json data/italian_stocks.json data/italian_stocks.csv data/last_update.json
+          git add -f dati/ data/
           git status
           if git diff --staged --quiet; then
             echo "Nessun cambiamento"
             exit 0
           fi
-          git commit -m "Aggiornamento dati: $(date -u +'%Y-%m-%d %H:%M UTC') - collector fix"
+          git commit -m "Aggiornamento dati: $(date -u +'%Y-%m-%d %H:%M UTC') - collector direct chart API"
           git push
