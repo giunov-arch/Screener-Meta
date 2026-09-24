@@ -185,34 +185,46 @@ def main():
         print(f"Solo {len(titoli)}/{len(universo)} riusciti - sotto soglia, non scrivo", file=sys.stderr)
         sys.exit(1)
 
-    # output 1: snapshot ricco (per Il Listino)
+    # output 1: snapshot ricco (per Il Listino) - 2.6M con barre
     OUTPUT_SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
-    snapshot = {"generato_il": date.today().isoformat(), "titoli": titoli}
+    snapshot = {"generato_il": date.today().isoformat(), "titoli": titoli, "count": len(titoli)}
     OUTPUT_SNAPSHOT.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
-    # duplica anche in root per compatibilità con index.html che usa /data e /dati in root
+    # duplica anche in root per compatibilità
     for p in [OUTPUT_SNAPSHOT_ROOT, OUTPUT_SNAPSHOT_DATA]:
         try:
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
-            print(f"Duplicato {p}")
+            print(f"Duplicato {p} - {len(titoli)} titoli")
         except Exception as e:
             print(f"Skip {p}: {e}")
-    # output 2: flat per Screener Italia
+    # output 2: flat per Screener Italia - ora con timestamp per forzare commit git
+    flat_obj = {
+        "generato_il": date.today().isoformat(),
+        "count": len(flat),
+        "titoli": flat,
+        "last_update": __import__('datetime').datetime.utcnow().isoformat()
+    }
     OUTPUT_FLAT_JSON.parent.mkdir(parents=True, exist_ok=True)
+    # Scrivi sia come array (compatibilità vecchia index) che come oggetto con data
     OUTPUT_FLAT_JSON.write_text(json.dumps(flat, ensure_ascii=False, indent=2), encoding="utf-8")
     try:
         OUTPUT_FLAT_JSON_ROOT.parent.mkdir(parents=True, exist_ok=True)
         OUTPUT_FLAT_JSON_ROOT.write_text(json.dumps(flat, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"Duplicato {OUTPUT_FLAT_JSON_ROOT}")
+        # Scrivi anche versione con wrapper per forzare update
+        (OUTPUT_FLAT_JSON_ROOT.parent / "italian_stocks_full.json").write_text(json.dumps(flat_obj, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"Duplicato {OUTPUT_FLAT_JSON_ROOT} - {len(flat)} titoli")
     except Exception as e:
         print(f"Skip flat root: {e}")
     try:
         import pandas as pd
         pd.DataFrame(flat).to_csv(OUTPUT_FLAT_CSV, index=False)
         pd.DataFrame(flat).to_csv(OUTPUT_FLAT_CSV_ROOT, index=False)
+        # Aggiorna sempre last_update.json per forzare commit
+        import json as _json
+        (OUTPUT_FLAT_JSON_ROOT.parent / "last_update.json").write_text(_json.dumps({"last_update": flat_obj["last_update"], "count": len(flat)}, indent=2))
     except: pass
 
-    print(f"\nScritto {OUTPUT_SNAPSHOT}, {OUTPUT_SNAPSHOT_ROOT}, {OUTPUT_SNAPSHOT_DATA} e {OUTPUT_FLAT_JSON}, {OUTPUT_FLAT_JSON_ROOT} - {len(titoli)}/{len(universo)} titoli")
+    print(f"\nScritto {OUTPUT_SNAPSHOT} ({len(titoli)} titoli, {sum(len(t.get('barre',[])) for t in titoli)} barre) e {OUTPUT_FLAT_JSON} ({len(flat)} titoli)")
     if falliti: print(f"Falliti: {', '.join(falliti)}", file=sys.stderr)
 
 if __name__ == "__main__":
