@@ -224,60 +224,92 @@ def fetch_consenso_yahoo(ticker, session):
         rec_mean = fin.get("recommendationMean", {}).get("raw")
         rec_key = fin.get("recommendationKey", "")
         
-        # Recommendation trend - prendi ultimo mese
+        # Recommendation trend - Yahoo Finance website usa il mese corrente (0m), non l'ultimo
+        # trend è ordinato: [0m (corrente), -1m, -2m, -3m, -4m] -> prendiamo rec[0]
         b = h = s = 0
+        strongBuy = buy = hold = sell = strongSell = 0
         if rec and len(rec) > 0:
-            last = rec[-1]  # ultimo mese disponibile
-            # Yahoo trend ha: strongBuy, buy, hold, sell, strongSell
-            strongBuy = last.get("strongBuy", 0)
-            buy = last.get("buy", 0)
-            hold = last.get("hold", 0)
-            sell = last.get("sell", 0)
-            strongSell = last.get("strongSell", 0)
+            # Trova il periodo 0m se esiste, altrimenti prendi il primo
+            current = None
+            for period in rec:
+                if period.get("period") == "0m":
+                    current = period
+                    break
+            if not current:
+                current = rec[0]  # fallback al più recente
+            
+            # Yahoo API ha: strongBuy, buy, hold, sell, strongSell
+            # Alcune versioni usano underperform al posto di sell
+            strongBuy = current.get("strongBuy", 0)
+            buy = current.get("buy", 0)
+            hold = current.get("hold", 0)
+            sell = current.get("sell", 0) + current.get("underperform", 0)
+            strongSell = current.get("strongSell", 0)
+            
+            # Mappatura esatta come Yahoo Finance website:
+            # Buy = strongBuy + buy, Hold = hold, Sell = sell + strongSell + underperform
             b = strongBuy + buy
             h = hold
             s = sell + strongSell
         
-        # Rating da recommendationMean o da buy/hold/sell
+        # Rating esatto come Yahoo: basato su recommendationMean (1-5 scale)
+        # 1-1.5 Strong Buy, 1.5-2.5 Buy, 2.5-3.5 Hold, 3.5-4.5 Underperform, 4.5-5 Sell
         rating = "Hold"
         if rec_key:
-            if rec_key in ["buy", "strong_buy"]:
+            rk = rec_key.lower()
+            if rk in ["strong_buy"]:
                 rating = "Buy"
-            elif rec_key in ["sell", "strong_sell", "underperform"]:
+            elif rk in ["buy"]:
+                rating = "Buy"
+            elif rk in ["strong_sell", "sell"]:
+                rating = "Sell"
+            elif "underperform" in rk:
                 rating = "Sell"
             else:
                 rating = "Hold"
-        else:
+        
+        # Se abbiamo recommendationMean, usalo per rating più preciso
+        if rec_mean is not None:
+            if rec_mean < 1.5:
+                rating = "Buy"
+            elif rec_mean < 2.5:
+                rating = "Buy"
+            elif rec_mean < 3.5:
+                rating = "Hold"
+            else:
+                rating = "Sell"
+        
+        # Fallback su conteggi se non abbiamo rec_key/rec_mean
+        if rating == "Hold" and (b+h+s) > 0:
             if b > h and b > s:
                 rating = "Buy"
             elif s > b and s > h:
                 rating = "Sell"
         
-        # Se abbiamo almeno target price, ritorna
-        if tp:
+        # n per target price e n per recommendations sono diversi su Yahoo
+        # Yahoo website mostra: per Target Price usa numberOfAnalystOpinions
+        # per Recommendations usa somma di buy/hold/sell del mese corrente
+        n_recommendations = b + h + s
+        n_target = int(n_analysts) if n_analysts else 0
+        
+        # Se abbiamo almeno uno dei due, ritorna
+        if tp or n_recommendations > 0:
             consenso = {
-                "tp": round(tp, 2),
-                "lo": round(lo, 2) if lo else round(tp*0.85, 2),
-                "hi": round(hi, 2) if hi else round(tp*1.15, 2),
-                "n": int(n_analysts) if n_analysts else (b+h+s if (b+h+s)>0 else 8),
+                "tp": round(tp, 2) if tp else None,
+                "lo": round(lo, 2) if lo else (round(tp*0.85, 2) if tp else None),
+                "hi": round(hi, 2) if hi else (round(tp*1.15, 2) if tp else None),
+                "n": int(n_recommendations if n_recommendations > 0 else n_target if n_target > 0 else 8),  # numero analisti per breakdown (come Yahoo website)
+                "n_target": int(n_target) if n_target else None,  # numero analisti per target price
                 "b": int(b),
                 "h": int(h),
                 "s": int(s),
+                "strongBuy": int(strongBuy),
+                "buy": int(buy),
+                "hold": int(hold),
+                "sell": int(sell),
+                "strongSell": int(strongSell),
                 "rating": rating,
-                "upside": None  # calcolato dopo da prezzo attuale
-            }
-            return consenso
-        elif (b+h+s) > 0:
-            # Abbiamo solo rating senza target
-            consenso = {
-                "tp": None,
-                "lo": None,
-                "hi": None,
-                "n": int(b+h+s),
-                "b": int(b),
-                "h": int(h),
-                "s": int(s),
-                "rating": rating,
+                "rec_mean": round(rec_mean, 2) if rec_mean else None,
                 "upside": None
             }
             return consenso
