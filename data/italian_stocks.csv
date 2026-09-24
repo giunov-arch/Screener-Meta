@@ -1,33 +1,33 @@
-Ticker,TickerYahoo,Nome,Settore,Prezzo,PE,PB,BarreCount
-ENI,ENI.MI,Eni,Energy,24.205,12.61,1.53,505
-ENEL,ENEL.MI,Enel,Utilities,8.769,20.88,3.52,505
-ISP,ISP.MI,Intesa Sanpaolo,Banche,6.733,12.02,1.72,505
-UCG,UCG.MI,UniCredit,Banche,82.7,11.71,1.76,505
-G,G.MI,Generali,Assicurazioni,43.44,14.73,2.05,505
-RACE,RACE.MI,Ferrari,Auto Luxury,361.95,39.05,17.4,505
-LDO,LDO.MI,Leonardo,Difesa,48.99,25.12,2.93,505
-PRY,PRY.MI,Prysmian,Industriali,124.5,25.83,5.13,505
-SRG,SRG.MI,Snam,Utilities,5.572,16.88,2.26,505
-TRN,TRN.MI,Terna,Utilities,9.172,17.31,3.09,505
-PST,PST.MI,Poste Italiane,Servizi,25.29,13.67,2.55,505
-MB,MB.MI,Mediobanca,Banche,28.74,19.55,2.0,505
-NEXI,NEXI.MI,Nexi,Tecnologia,4.142,6.24,0.72,505
-CPR,CPR.MI,Campari,Consumer,6.044,26.28,1.82,505
-BC,BC.MI,Brunello Cucinelli,Lusso,79.96,0.0,9.92,505
-MONC,MONC.MI,Moncler,Lusso,44.1,18.77,3.29,505
-AMP,AMP.MI,Amplifon,Healthcare,11.745,37.89,2.06,505
-BZU,BZU.MI,Buzzi Unicem,Materiali,36.98,7.77,0.9,505
-IP,IP.MI,Interpump,Industriali,35.7,17.85,1.74,505
-AZM,AZM.MI,Azimut,Asset Management,39.01,10.49,2.8,505
-SPM,SPM.MI,Saipem,Energy,4.37,33.62,3.67,505
-TEN,TEN.MI,Tenaris,Energy,24.92,15.29,1.7,505
-TIT,TIT.MI,Telecom Italia,TLC,7.366,49.11,1.36,505
-BPE,BPE.MI,BPER Banca,Banche,14.118,12.83,1.63,505
-BMPS,BMPS.MI,MPS,Banche,11.888,9.91,1.37,505
-BAMI,BAMI.MI,Banco BPM,Banche,16.285,12.82,1.57,505
-REC,REC.MI,Recordati,Healthcare,52.95,22.25,5.09,505
-DIA,DIA.MI,Diasorin,Healthcare,78.6,28.9,2.73,505
-IG,IG.MI,Italgas,Utilities,8.384,11.98,2.26,505
-HER,HER.MI,Hera,Utilities,3.564,11.14,1.29,505
-ERG,ERG.MI,ERG,Utilities,22.78,39.96,1.75,505
-A2A,A2A.MI,A2A,Utilities,2.277,10.35,1.37,505
+Ticker,TickerYahoo,Nome,Settore,Prezzo,PE,PB,ROE,DivYield,DebtEquity,MarketCapMld,SMA50,SMA200,DistSMA200,Dist52w,BarreCount
+ENI,ENI.MI,Eni,Energy,24.175,8.2,0.85,11.5,6.5,0.42,47.5,23.46,21.28,13.6,-2.85,506
+ENEL,ENEL.MI,Enel,Utilities,8.855,11.5,1.75,14.8,5.8,1.25,68.0,9.45,9.52,-7.0,-13.86,506
+ISP,ISP.MI,Intesa Sanpaolo,Banche,6.743,7.8,0.95,13.2,7.2,,62.0,6.7,5.99,12.49,-2.52,506
+UCG,UCG.MI,UniCredit,Banche,82.74,6.9,0.72,14.5,6.8,,58.0,83.4,74.36,11.28,-3.96,506
+G,G.MI,Generali,Assicurazioni,43.46,9.5,1.1,11.0,5.5,,32.0,44.08,38.83,11.93,-5.91,506
+RACE,RACE.MI,Ferrari,Auto Luxury,362.35,42.0,14.5,38.0,0.7,0.55,70.0,351.15,315.54,14.83,-15.12,506
+LDO,LDO.MI,Leonardo,Difesa,49.775,14.2,1.4,9.5,1.8,0.65,12.5,53.53,54.31,-8.34,-22.54,506
+PRY,PRY.MI,Prysmian,Industriali,125.05,18.0,3.2,18.0,2.5,0.75,14.0,123.74,118.22,5.78,-20.3,506
+SRG,SRG.MI,Snam,Utilities,5.62,13.5,1.5,11.0,5.2,1.1,15.0,5.8,6.12,-8.18,-17.45,506
+TRN,TRN.MI,Terna,Utilities,9.252,18.5,2.8,15.5,4.2,1.3,14.5,9.75,9.77,-5.27,-10.91,506
+PST,PST.MI,Poste Italiane,Servizi,25.855,9.8,1.3,13.5,6.0,,14.0,26.81,24.39,6.0,-11.55,506
+MB,MB.MI,Mediobanca,Banche,28.88,8.5,0.85,11.5,6.2,,11.0,28.17,21.95,31.54,-0.35,506
+NEXI,NEXI.MI,Nexi,Tecnologia,4.126,22.0,0.8,3.5,0.0,1.4,6.5,4.21,3.73,10.57,-17.64,506
+CPR,CPR.MI,Campari,Consumer,6.036,28.0,4.5,15.0,1.0,0.6,9.5,5.85,5.9,2.25,-10.42,506
+BC,BC.MI,Brunello Cucinelli,Lusso,81.3,52.0,10.5,20.0,0.8,0.3,5.8,84.56,84.06,-3.28,-20.41,506
+MONC,MONC.MI,Moncler,Lusso,44.13,24.0,5.5,24.0,1.5,0.1,14.5,47.42,51.53,-14.36,-24.64,506
+AMP,AMP.MI,Amplifon,Healthcare,11.705,26.0,4.2,16.5,0.9,0.7,5.2,11.74,11.46,2.1,-25.54,506
+BZU,BZU.MI,Buzzi Unicem,Materiali,37.115,9.0,0.9,10.5,3.8,0.2,5.5,40.28,45.43,-18.3,-31.9,506
+IP,IP.MI,Interpump,Industriali,35.64,18.5,3.0,16.0,1.2,0.4,4.2,36.07,38.17,-6.64,-30.12,506
+AZM,AZM.MI,Azimut,Asset Management,39.02,11.0,2.5,22.0,5.5,0.1,3.0,37.97,36.05,8.23,-2.4,506
+SPM,SPM.MI,Saipem,Energy,4.358,18.0,1.2,6.5,0.0,0.8,4.5,4.36,3.86,12.93,-9.6,506
+TEN,TEN.MI,Tenaris,Energy,24.93,6.5,0.85,13.5,6.5,0.05,14.0,24.08,23.25,7.23,-9.97,506
+TIT,TIT.MI,Telecom Italia,TLC,7.516,,0.4,-2.0,0.0,1.8,4.8,7.6,6.78,10.8,-7.65,506
+BPE,BPE.MI,BPER Banca,Banche,14.158,6.2,0.55,10.5,7.5,,6.2,14.21,12.65,11.94,-4.56,506
+BMPS,BMPS.MI,MPS,Banche,11.936,5.8,0.48,9.5,5.0,,5.5,11.69,9.66,23.52,-0.83,506
+BAMI,BAMI.MI,Banco BPM,Banche,16.29,5.5,0.58,12.5,8.0,,8.8,16.21,13.84,17.72,-5.18,506
+REC,REC.MI,Recordati,Healthcare,52.95,21.0,4.2,20.5,2.2,0.55,10.5,52.27,49.84,6.23,-2.04,506
+DIA,DIA.MI,Diasorin,Healthcare,79.7,24.0,2.2,9.0,1.2,0.65,4.8,73.94,68.87,15.73,0.0,506
+IG,IG.MI,Italgas,Utilities,8.484,12.0,1.6,13.5,5.5,0.95,4.5,8.86,9.87,-14.02,-24.11,506
+HER,HER.MI,Hera,Utilities,3.592,13.5,1.2,9.0,4.8,0.85,4.8,3.78,3.95,-9.06,-18.84,506
+ERG,ERG.MI,ERG,Utilities,22.72,16.0,1.8,11.5,4.0,0.75,3.2,22.23,22.62,0.43,-8.9,506
+A2A,A2A.MI,A2A,Utilities,2.297,11.5,1.1,10.0,5.2,0.9,5.5,2.31,2.35,-2.43,-15.68,506
