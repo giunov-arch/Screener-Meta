@@ -76,14 +76,22 @@
 </div>
 
 <script>
-// Fix: usa SOLO /data files come richiesto - più stabile di /dati
+// Fix: usa /data come primario (più stabile) ma prova anche /dati per compatibilità
+// Ora fetch.yml duplica dati/snapshot.json -> data/snapshot.json così /data contiene sempre il file grande
 const WORKER_URL = "https://rapid-paper-5635.giunov.workers.dev";
 const SNAPSHOT_URLS = [
+  "./data/snapshot.json",
+  "./dati/snapshot.json",
   "./data/italian_stocks.json",
+  "/Screener-Meta/data/snapshot.json",
+  "/Screener-Meta/dati/snapshot.json",
   "/Screener-Meta/data/italian_stocks.json",
+  "https://giunov-arch.github.io/Screener-Meta/data/snapshot.json",
+  "https://giunov-arch.github.io/Screener-Meta/dati/snapshot.json",
   "https://giunov-arch.github.io/Screener-Meta/data/italian_stocks.json",
-  "https://cdn.jsdelivr.net/gh/giunov-arch/Screener-Meta@main/data/italian_stocks.json",
-  "https://raw.githubusercontent.com/giunov-arch/Screener-Meta/main/data/italian_stocks.json"
+  "https://cdn.jsdelivr.net/gh/giunov-arch/Screener-Meta@main/data/snapshot.json",
+  "https://cdn.jsdelivr.net/gh/giunov-arch/Screener-Meta@main/dati/snapshot.json",
+  "https://cdn.jsdelivr.net/gh/giunov-arch/Screener-Meta@main/data/italian_stocks.json"
 ];
 
 let snapshot = null;
