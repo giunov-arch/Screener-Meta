@@ -24,41 +24,34 @@ jobs:
 
       - name: Install deps
         run: |
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -f github-screener-italia/requirements.txt ]; then pip install -r github-screener-italia/requirements.txt; fi
-          pip install yfinance==0.2.54 pandas==2.2.3 numpy==1.26.4 requests curl-cffi 2>/dev/null || pip install yfinance pandas numpy requests
+          pip install -r requirements.txt 2>/dev/null || true
+          pip install -r github-screener-italia/requirements.txt 2>/dev/null || true
+          pip install yfinance==0.2.54 pandas==2.2.3 numpy==1.26.4 requests curl-cffi
 
-      - name: Run fetcher
+      - name: Run fetcher unico
         run: |
-          set -x
-          if [ -f collector.py ]; then python collector.py || true; fi
-          python github-screener-italia/fetcher_v4_collector_based.py || true
-          if [ ! -f dati/snapshot.json ] && [ ! -f data/snapshot.json ]; then
-            python github-screener-italia/fetcher.py --no-fundamentals || python fetcher.py --no-fundamentals || true
+          # Un solo file: fetcher.py (ex fetcher_v4_collector_based.py rinominato)
+          if [ -f fetcher.py ]; then
+            echo "Uso fetcher.py in root"
+            python fetcher.py
+          elif [ -f github-screener-italia/fetcher.py ]; then
+            echo "Uso github-screener-italia/fetcher.py"
+            python github-screener-italia/fetcher.py
+          else
+            echo "ERRORE: nessun fetcher.py trovato" && ls -lh && exit 1
           fi
           echo "--- file generati ---"
           ls -lh dati/ data/ 2>/dev/null || true
-          ls -lh github-screener-italia/dati/ github-screener-italia/data/ 2>/dev/null || true
-          mkdir -p dati data
-          [ -f github-screener-italia/dati/snapshot.json ] && cp github-screener-italia/dati/snapshot.json dati/snapshot.json || true
-          [ -f github-screener-italia/dati/snapshot.json ] && cp github-screener-italia/dati/snapshot.json data/snapshot.json || true
-          [ -f github-screener-italia/data/italian_stocks.json ] && cp github-screener-italia/data/italian_stocks.json data/italian_stocks.json || true
-          [ -f github-screener-italia/data/italian_stocks.csv ] && cp github-screener-italia/data/italian_stocks.csv data/italian_stocks.csv || true
-          [ -f dati/snapshot.json ] && cp dati/snapshot.json data/snapshot.json || true
-          ls -lh dati/snapshot.json data/snapshot.json data/italian_stocks.json 2>/dev/null || true
 
       - name: Commit e push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f dati/snapshot.json data/snapshot.json data/italian_stocks.json data/italian_stocks_full.json data/italian_stocks.csv data/last_update.json 2>/dev/null || true
+          git add -f dati/snapshot.json data/snapshot.json data/italian_stocks.json data/italian_stocks.csv data/last_update.json 2>/dev/null || true
           git add -f dati/ data/ 2>/dev/null || true
-          # Forza aggiornamento timestamp per italian_stocks anche se prezzi uguali
-          echo "{\"last_update\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > data/last_update.json
-          git add -f data/last_update.json 2>/dev/null || true
           git status
           if git diff --staged --quiet; then
-            echo "Nessun cambiamento da committare"
+            echo "Nessun cambiamento"
             exit 0
           fi
           git commit -m "Aggiornamento dati: $(date -u +'%Y-%m-%d %H:%M UTC')"
