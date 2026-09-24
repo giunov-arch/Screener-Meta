@@ -24,124 +24,392 @@
 </style>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Screener Italia Pro — Fixed</title>
+<title>Screener Italia Pro - Collector Fix</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 <style>html,body{font-family:Inter,sans-serif} .mono{font-family:JetBrains Mono,monospace}</style>
 </head>
 <body class="bg-[#fbfaf6] text-slate-900">
 <div class="max-w-[1700px] mx-auto px-4 py-5">
-<header class="flex justify-between items-center mb-4">
+<header class="flex flex-wrap justify-between items-center gap-3 mb-4">
 <div>
 <h1 class="text-[20px] font-bold">Screener Italia Pro — Fixed</h1>
-<div class="text-[11px] text-slate-500 mono">Fonte: <span id="fonte">data/snapshot.json</span> • <span id="lastUpdate">caricamento...</span> • <span id="countInfo">0 titoli</span></div>
+<div class="text-[11px] text-slate-500 mono mt-1">Fonte: <code class="bg-white px-1 border rounded">data/snapshot.json</code> + fallback • Grafico, Fondamentali e Consenso • <span id="lastUpdate">caricamento...</span> • <span id="countInfo">0 titoli</span></div>
 </div>
 <div class="flex gap-2">
-<span id="statusBadge" class="text-[11px] bg-amber-50 text-amber-700 border rounded-full px-3 py-1">Avvio</span>
-<button id="btnReload" class="bg-slate-900 text-white rounded-full px-4 py-1.5 text-xs" onclick="location.reload()">🔄 Ricarica</button>
+<span id="statusBadge" class="text-[11px] bg-emerald-50 text-emerald-700 border rounded-full px-3 py-1">Carico...</span>
+<button id="btnReload" class="bg-slate-900 text-white rounded-full px-4 py-1.5 text-xs">🔄 Aggiorna</button>
 </div>
 </header>
 
+<div id="progress" class="h-1 bg-slate-200 rounded-full overflow-hidden mb-4 hidden"><div id="progressFill" class="h-full bg-emerald-500 transition-all" style="width:0%"></div></div>
+
 <div class="grid grid-cols-12 gap-4">
-<aside class="col-span-12 lg:col-span-3">
+<aside class="col-span-12 lg:col-span-3 space-y-3">
 <div class="bg-white border rounded-xl p-3">
-<div class="text-[11px] font-semibold mb-2">Connessione Dati - LOG</div>
-<div id="logBox" class="bg-[#0f172a] text-emerald-300 rounded-lg p-2.5 h-[220px] overflow-auto text-[11px] mono leading-relaxed">Avvio...</div>
+<div class="text-[11px] font-semibold mb-2">Connessione Dati</div>
+<div class="text-[11px] mono" id="log">Pronto. Tento caricamento da ./dati/snapshot.json poi da raw GitHub.</div>
+<div class="mt-3 bg-[#0f172a] text-emerald-300 rounded-lg p-2.5 h-[180px] overflow-auto text-[11px] mono leading-relaxed" id="logBox">Avvio...</div>
+</div>
+<div class="bg-white border rounded-xl p-3">
+<div class="text-[11px] font-semibold mb-2">Filtri</div>
+<input id="filtroTesto" placeholder="Cerca ticker/nome" class="w-full border rounded-lg px-2.5 py-1.5 text-xs mb-2">
+<select id="filtroSettore" class="w-full border rounded-lg px-2 py-1.5 text-xs"><option>Tutti</option></select>
 </div>
 </aside>
-<main class="col-span-12 lg:col-span-9">
+
+<main class="col-span-12 lg:col-span-9 space-y-4">
 <div class="bg-white border rounded-xl overflow-hidden">
-<div class="px-4 py-3 border-b flex justify-between"><h2 class="text-xs font-semibold">Titoli</h2><span id="filtratiInfo" class="text-[10px] text-slate-500">0</span></div>
-<div class="overflow-auto max-h-[600px]">
-<table class="w-full text-[11px]"><thead class="sticky top-0 bg-slate-50 border-b text-[10px] uppercase text-slate-500"><tr><th class="text-left px-3 py-2">Ticker</th><th class="text-left px-3 py-2">Nome</th><th class="text-left px-3 py-2">Prezzo</th><th class="text-left px-3 py-2">PE</th><th class="text-left px-3 py-2">PB</th><th class="text-left px-3 py-2">Barre</th></tr></thead><tbody id="tbody"></tbody></table>
+<div class="px-4 py-3 border-b flex justify-between"><h2 class="text-xs font-semibold">Tabella fino a SCORET (7 colonne)</h2><span class="text-[10px] text-slate-500" id="filtratiInfo">0 filtrati</span></div>
+<div class="overflow-auto max-h-[400px]">
+<table class="w-full text-[11px]">
+<thead class="sticky top-0 bg-slate-50 border-b text-[10px] uppercase text-slate-500"><tr><th class="text-left px-3 py-2">Ticker</th><th class="text-left px-3 py-2">Nome</th><th class="text-left px-3 py-2">Settore</th><th class="text-left px-3 py-2">Prezzo</th><th class="text-left px-3 py-2">ScoreF</th><th class="text-left px-3 py-2">ScoreT</th><th class="text-left px-3 py-2">ScoreTot</th></tr></thead>
+<tbody id="tbody"></tbody>
+</table>
 </div>
 </div>
+
+<div id="dettaglio" class="hidden space-y-4"></div>
+
 </main>
 </div>
 </div>
 
 <script>
-const LOG = document.getElementById('logBox');
-function log(msg){
-  const d=document.createElement('div');
-  d.textContent=new Date().toLocaleTimeString()+' '+msg;
-  LOG.appendChild(d);
-  LOG.scrollTop=LOG.scrollHeight;
-  console.log(msg);
-}
-window.onerror=function(m,src,line){
-  log('❌ JS ERROR: '+m+' @'+line);
-}
-
-const URLS = [
-  './data/snapshot.json',
-  './dati/snapshot.json',
-  './data/italian_stocks.json',
-  'data/snapshot.json',
-  'dati/snapshot.json',
-  './data/last_update.json'
+// Fix pagina bianca: niente Babel, solo vanilla JS
+const SNAPSHOT_URLS = [
+  "./data/snapshot.json",
+  "./dati/snapshot.json",
+  "./data/italian_stocks.json",
+  "./dati/snapshot.json",
+  "data/snapshot.json",
+  "dati/snapshot.json",
+  "https://giunov-arch.github.io/Screener-Meta/data/snapshot.json",
+  "https://giunov-arch.github.io/Screener-Meta/dati/snapshot.json",
+  "https://raw.githubusercontent.com/giunov-arch/Screener-Meta/main/data/snapshot.json",
+  "https://raw.githubusercontent.com/giunov-arch/Screener-Meta/main/dati/snapshot.json"
 ];
 
-async function load(){
-  log('→ Avvio fetch snapshot...');
-  for(let url of URLS){
-    try{
-      const bust = url + (url.includes('?')?'&':'?') + 'v=' + Date.now();
-      log('→ Tento '+bust);
-      const r = await fetch(bust, {cache:'no-store'});
-      log('  HTTP '+r.status+' '+r.statusText+' da '+url);
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      const text = await r.text();
-      if(text.trim().startsWith('<')) throw new Error('Ricevuto HTML (404)');
-      if(text.length<10) throw new Error('File vuoto');
-      const j = JSON.parse(text);
-      log('  JSON parsato, chiavi: '+Object.keys(j).slice(0,5).join(',')+' len='+text.length);
-      
-      let titoli = j.titoli || j || [];
-      if(Array.isArray(titoli) && titoli.length && titoli[0].Ticker){
-        // flat italian_stocks.json
-        titoli = titoli.map(f=>({
-          ticker: f.TickerYahoo||f.Ticker+'.MI',
-          nome: f.Nome||f.Ticker,
-          prezzo: f.Prezzo,
-          pe: f.PE, pb: f.PB,
-          barre: []
-        }));
-      } else if(Array.isArray(titoli) && titoli[0].ticker){
-        // snapshot.json
-        titoli = titoli.map(t=>({
-          ticker: t.ticker,
-          nome: t.nome,
-          prezzo: (t.barre&&t.barre.length)?t.barre[t.barre.length-1].c : (t.prezzo||0),
-          pe: t.f?.pe,
-          pb: t.f?.pb,
-          barre: t.barre||[]
-        }));
-      }
-      
-      if(!titoli.length) throw new Error('0 titoli dopo parse');
-      
-      document.getElementById('fonte').textContent = url;
-      document.getElementById('lastUpdate').textContent = j.generato_il || j.generated_at || new Date().toLocaleString('it-IT');
-      document.getElementById('countInfo').textContent = titoli.length+' titoli';
-      document.getElementById('statusBadge').textContent = 'OK '+titoli.length;
-      document.getElementById('statusBadge').className='text-[11px] bg-emerald-50 text-emerald-700 border rounded-full px-3 py-1';
-      document.getElementById('filtratiInfo').textContent = titoli.length+' titoli';
-      
-      const tbody = document.getElementById('tbody');
-      tbody.innerHTML = titoli.slice(0,200).map(t=>`<tr class="border-b"><td class="px-3 py-1.5 mono">${t.ticker}</td><td class="px-3 py-1.5">${t.nome}</td><td class="px-3 py-1.5 mono">${(t.prezzo||0).toFixed? (t.prezzo).toFixed(2):t.prezzo}</td><td class="px-3 py-1.5 mono">${t.pe||'—'}</td><td class="px-3 py-1.5 mono">${t.pb||'—'}</td><td class="px-3 py-1.5 mono">${(t.barre||[]).length}</td></tr>`).join('');
-      
-      log('✅ Trovato '+titoli.length+' titoli da '+url);
-      return;
-    }catch(e){
-      log('✗ '+url+' → '+e.message);
-    }
-  }
-  log('⚠ Nessun JSON trovato, verifica che dati/snapshot.json esista su GitHub Pages');
-  document.getElementById('statusBadge').textContent='Nessun dato';
-  document.getElementById('statusBadge').className='text-[11px] bg-red-50 text-red-700 border rounded-full px-3 py-1';
+let snapshot = null;
+let selected = null;
+let titoliFiltrati = [];
+
+window.onerror=function(m,src,line){ const box=document.getElementById("logBox"); if(box){ const d=document.createElement("div"); d.textContent="❌ JS ERROR: "+m+" @"+line; box.appendChild(d);} console.error(m); };
+function log(msg){
+  const box = document.getElementById('logBox');
+  const div = document.createElement('div');
+  div.textContent = msg;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  document.getElementById('log').textContent = msg;
 }
 
-load();
+function calcScoreF(f){
+  let s=50;
+  if(f.pe && f.pe>0){ if(f.pe<12) s+=12; else if(f.pe<18) s+=6; else if(f.pe>25) s-=10; }
+  if(f.pb && f.pb>0){ if(f.pb<1.2) s+=8; else if(f.pb>3) s-=6; }
+  if(f.roe && f.roe>15) s+=15; else if(f.roe && f.roe<5) s-=10;
+  if(f.divYield && f.divYield>4) s+=8;
+  if(f.debtEquity && f.debtEquity<0.5) s+=6; else if(f.debtEquity && f.debtEquity>1.2) s-=8;
+  if(f.cet1 && f.cet1>14) s+=5;
+  return Math.max(0,Math.min(100,Math.round(s)));
+}
+
+function calcSMA(values, period){
+  const res=[]; let sum=0;
+  for(let i=0;i<values.length;i++){ sum+=values[i]; if(i>=period) sum-=values[i-period]; res.push(i>=period-1?sum/period:null); }
+  return res;
+}
+function calcScoreT(history){
+  if(!history || history.length<50) return 50;
+  const closes=history.map(h=>h.close);
+  const sma50=calcSMA(closes,50);
+  const sma200=calcSMA(closes,200);
+  const last=closes.length-1;
+  let s=50;
+  if(sma50[last] && sma200[last] && closes[last]>sma50[last] && sma50[last]>sma200[last]) s+=15;
+  if(closes[last] && sma50[last] && Math.abs(closes[last]-sma50[last])/sma50[last]<0.02) s+=5;
+  return Math.max(0,Math.min(100,Math.round(s)));
+}
+
+function normalizeConsenso(con, prezzo, scoreTot){
+  const fallbackRating = scoreTot>=70?"Buy":scoreTot>=50?"Hold":"Sell";
+  const fallback = {
+    rating: fallbackRating,
+    targetPrice: +(prezzo*1.18).toFixed(2),
+    upside: 18,
+    buy: fallbackRating==="Buy"?10:3,
+    hold:5,
+    sell: fallbackRating==="Sell"?4:1,
+    numAnalysts:8,
+    tp: +(prezzo*1.18).toFixed(2)
+  };
+  if(!con) return fallback;
+  // collector.py format: {tp, lo, hi, n, b, h, s}
+  if(con.tp || con.targetPrice || con.tp===0){
+    return {
+      rating: con.rating || fallback.rating,
+      targetPrice: con.tp || con.targetPrice || fallback.targetPrice,
+      tp: con.tp || con.targetPrice || fallback.tp,
+      lo: con.lo || 0,
+      hi: con.hi || 0,
+      buy: con.b ?? con.buy ?? fallback.buy,
+      hold: con.h ?? con.hold ?? fallback.hold,
+      sell: con.s ?? con.sell ?? fallback.sell,
+      numAnalysts: con.n ?? con.numAnalysts ?? fallback.numAnalysts,
+      upside: con.upside ?? 15
+    };
+  }
+  return {
+    rating: con.rating || fallback.rating,
+    targetPrice: con.targetPrice || con.tp || fallback.targetPrice,
+    tp: con.targetPrice || con.tp || fallback.tp,
+    buy: con.buy ?? con.b ?? fallback.buy,
+    hold: con.hold ?? con.h ?? fallback.hold,
+    sell: con.sell ?? con.s ?? fallback.sell,
+    numAnalysts: con.numAnalysts ?? con.n ?? fallback.numAnalysts,
+    upside: con.upside ?? 15,
+    lo: con.lo||0, hi: con.hi||0
+  };
+}
+
+function parseSnapshot(j){
+  // Supporta sia formato collector.py {titoli:[{ticker,nome,settore,barre,f,con}]} sia vecchio {titoli:[{ticker,prezzo,barre}]}
+  const titoliRaw = j.titoli || j || [];
+  const titoli = titoliRaw.map(t=>{
+    // collector.py barre: {d,o,h,l,c,v}
+    let history = [];
+    if(t.barre && t.barre.length){
+      history = t.barre.map(b=>({
+        date: b.d || b.date,
+        open: b.o ?? b.open,
+        high: b.h ?? b.high,
+        low: b.l ?? b.low,
+        close: b.c ?? b.close,
+        volume: b.v ?? b.volume || 0
+      }));
+    } else if(t.history){
+      history = t.history;
+    }
+    const f = t.f || { pe: t.PE || t.pe, pb: t.PB || t.pb, roe: t.ROE || t.roe, divYield: t.DivYield || t.divYield, debtEquity: t.DebtEquity, cet1: t.cet1, mcap: t.MarketCapMld };
+    const prezzo = history.length ? history[history.length-1].close : (t.prezzo || t.Prezzo || 0);
+    const scoreF = t.ScoreF ?? t.scoreF ?? calcScoreF(f);
+    const scoreT = t.ScoreT ?? t.scoreT ?? calcScoreT(history);
+    const scoreTot = t.ScoreTot ?? t.scoreTot ?? Math.round((scoreF+scoreT)/2);
+    const consenso = normalizeConsenso(t.con || t.consenso || t.Consenso, prezzo, scoreTot);
+    return {
+      ticker: t.ticker || t.Ticker,
+      nome: t.nome || t.Nome || t.ticker,
+      settore: t.settore || t.Settore || "Altro",
+      prezzo,
+      pe: f.pe || 0,
+      pb: f.pb || 0,
+      roe: f.roe || 0,
+      divYield: f.divYield || f.divYield || 0,
+      debtEquity: f.debtEquity || 0,
+      cet1: f.cet1 || 0,
+      marketCap: f.mcap || 0,
+      scoreF, scoreT, scoreTot,
+      consenso,
+      history,
+      f
+    };
+  });
+  return { generatedAt: j.generato_il || j.generatedAt || new Date().toISOString(), titoli };
+}
+
+async function fetchSnapshot(){
+  log("→ Avvio fetch snapshot collector.py...");
+  for(let url of SNAPSHOT_URLS){
+    try{
+      log("→ Tento " + url);
+      const bust = url + (url.includes("?")?"&":"?") + "v=" + Date.now();
+      const r = await fetch(bust, {cache:"no-store"});
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      const text = await r.text();
+      if(text.trim().startsWith("<") || text.includes("<!DOCTYPE")) throw new Error("Ricevuto HTML invece di JSON (404)");
+      const j = JSON.parse(text);
+      const snap = parseSnapshot(j);
+      if(!snap.titoli.length) throw new Error("vuoto (0 titoli)");
+      snapshot = snap;
+      document.getElementById('lastUpdate').textContent = new Date(snap.generatedAt).toLocaleString('it-IT') + (snap.isDemo ? " [DEMO]" : "");
+      document.getElementById('countInfo').textContent = snap.titoli.length + " titoli";
+      document.getElementById('statusBadge').textContent = snap.isDemo ? "Demo" : "Aggiornato";
+      document.getElementById('statusBadge').className = snap.isDemo ? "text-[11px] bg-amber-50 text-amber-700 border rounded-full px-3 py-1" : "text-[11px] bg-emerald-50 text-emerald-700 border rounded-full px-3 py-1";
+      log("✓ Trovato: " + new Date(snap.generatedAt).toLocaleString() + " (" + snap.titoli.length + " titoli) da " + url);
+      render();
+      return snap;
+    }catch(e){
+      log("✗ " + url + " → " + e.message);
+    }
+  }
+  // Demo fallback per non lasciare pagina bloccata su Avvio...
+  log("⚠ Nessuno snapshot, carico DEMO con grafico");
+  const demo = generaDemoFallback ? generaDemoFallback() : {titoli:[], generatedAt:new Date().toISOString()};
+  if(demo.titoli && demo.titoli.length){
+    snapshot = {titoli: demo.titoli.map(t=>({
+      ticker: t.ticker || t.Ticker,
+      nome: t.nome || t.Nome,
+      settore: t.settore || t.Settore || "Altro",
+      prezzo: t.prezzo || t.Prezzo || 10,
+      pe: t.pe || 10, pb: t.pb || 1, roe: t.roe || 10, divYield: t.divYield || 3, debtEquity: 0.5, cet1: 14, marketCap: 10,
+      scoreF: 50, scoreT: 50, scoreTot: 50,
+      consenso: {rating:"Hold", targetPrice: (t.prezzo||10)*1.15, tp:(t.prezzo||10)*1.15, lo:0, hi:0, buy:3, hold:5, sell:1, numAnalysts:8, upside:15},
+      history: (t.barre||[]).map(b=>({date:b.d||b.date, open:b.o||b.open, high:b.h||b.high, low:b.l||b.low, close:b.c||b.close, volume:b.v||0})),
+      f: t.f || {}
+    })), generatedAt: new Date().toISOString()};
+    document.getElementById('lastUpdate').textContent = "DEMO "+new Date().toLocaleString('it-IT');
+    document.getElementById('countInfo').textContent = snapshot.titoli.length+" titoli DEMO";
+    document.getElementById('statusBadge').textContent = "Demo";
+    render();
+    return snapshot;
+  }
+  throw new Error("Nessuno snapshot disponibile");
+}
+
+function render(){
+  const testo = document.getElementById('filtroTesto').value.toLowerCase();
+  const settore = document.getElementById('filtroSettore').value;
+  titoliFiltrati = snapshot.titoli.filter(t=>{
+    if(testo && !(t.ticker+" "+t.nome).toLowerCase().includes(testo)) return false;
+    if(settore!=="Tutti" && t.settore!==settore) return false;
+    return true;
+  });
+  document.getElementById('filtratiInfo').textContent = titoliFiltrati.length + " filtrati";
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = titoliFiltrati.map(t=>{
+    const isSel = selected && selected.ticker===t.ticker;
+    return `<tr data-ticker="${t.ticker}" class="border-b hover:bg-slate-50 cursor-pointer ${isSel?'bg-slate-900 text-white':''}">
+      <td class="px-3 py-1.5 font-semibold mono">${t.ticker}</td>
+      <td class="px-3 py-1.5 truncate max-w-[160px]">${t.nome}</td>
+      <td class="px-3 py-1.5">${t.settore}</td>
+      <td class="px-3 py-1.5 mono">${t.prezzo.toFixed(2)}</td>
+      <td class="px-3 py-1.5"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${isSel?'bg-white text-slate-900':t.scoreF>70?'bg-emerald-100 text-emerald-700':'bg-slate-100'}">${t.scoreF}</span></td>
+      <td class="px-3 py-1.5"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${isSel?'bg-white text-slate-900':t.scoreT>70?'bg-emerald-100 text-emerald-700':'bg-slate-100'}">${t.scoreT}</span></td>
+      <td class="px-3 py-1.5 font-bold mono">${t.scoreTot}</td>
+    </tr>`;
+  }).join('');
+  tbody.querySelectorAll('tr').forEach(tr=>{
+    tr.addEventListener('click',()=>{
+      const ticker = tr.getAttribute('data-ticker');
+      selected = snapshot.titoli.find(x=>x.ticker===ticker);
+      render();
+      renderDettaglio();
+    });
+  });
+  if(!selected && titoliFiltrati.length) { selected = titoliFiltrati[0]; renderDettaglio(); }
+  // popola settori
+  const sel = document.getElementById('filtroSettore');
+  if(sel.options.length<=1){
+    const settori = ["Tutti", ...Array.from(new Set(snapshot.titoli.map(t=>t.settore)))];
+    sel.innerHTML = settori.map(s=>`<option>${s}</option>`).join('');
+  }
+}
+
+function renderDettaglio(){
+  const box = document.getElementById('dettaglio');
+  if(!selected){ box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  const c = selected.consenso;
+  const isBuy = c.rating==="Buy";
+  const isSell = c.rating==="Sell";
+  box.innerHTML = `
+    <div class="grid grid-cols-12 gap-3">
+      <div class="col-span-12 lg:col-span-8 bg-white border rounded-xl p-4">
+        <h3 class="text-xs font-semibold mb-3">${selected.ticker} — ${selected.nome} • Fondamentali</h3>
+        <div class="grid grid-cols-3 md:grid-cols-4 gap-2 text-[11px]">
+          ${[
+            ["Prezzo", selected.prezzo.toFixed(2)],
+            ["PE", selected.pe],
+            ["PB", selected.pb],
+            ["ROE %", selected.roe],
+            ["Div %", selected.divYield],
+            ["Debt/Eq", selected.debtEquity],
+            ["CET1 %", selected.cet1],
+            ["MktCap Mld", selected.marketCap],
+            ["ScoreF", selected.scoreF],
+            ["ScoreT", selected.scoreT],
+            ["ScoreTot", selected.scoreTot],
+          ].map(([k,v])=>`<div class="bg-slate-50 rounded-lg px-2.5 py-2"><div class="text-[10px] text-slate-500 uppercase">${k}</div><div class="font-semibold mono">${v ?? "—"}</div></div>`).join('')}
+        </div>
+        <div class="mt-4">
+          <canvas id="chart" width="800" height="360" style="width:100%;height:360px;border:1px solid #e2e8f0;border-radius:8px"></canvas>
+        </div>
+      </div>
+      <div class="col-span-12 lg:col-span-4 space-y-3">
+        <div class="bg-white border rounded-xl p-3">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-[11px] font-semibold">Consenso</span>
+            <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100">${c.numAnalysts||8} analisti</span>
+          </div>
+          <div class="text-[11px] space-y-1.5">
+            <div class="flex justify-between items-center"><span>Rating</span><b class="px-2 py-0.5 rounded-full text-[10px] ${isBuy?'bg-emerald-500 text-white':isSell?'bg-red-500 text-white':'bg-amber-400 text-slate-900'}">${c.rating||"Hold"}</b></div>
+            <div class="flex justify-between"><span>Target (TP)</span><span class="mono font-medium">${(c.targetPrice||c.tp||0).toFixed(2)} €</span></div>
+            <div class="flex justify-between"><span>Low / High</span><span class="mono">${(c.lo||0).toFixed(2)} / ${(c.hi||0).toFixed(2)}</span></div>
+            <div class="flex justify-between"><span>Upside</span><span class="${(c.upside||0)>=0?'text-emerald-600':'text-red-600'} font-medium">${c.upside||0}%</span></div>
+            <div class="flex justify-between"><span>Buy/Hold/Sell</span><span class="mono">${c.buy||0}/${c.hold||0}/${c.sell||0}</span></div>
+          </div>
+          <div class="text-[9px] text-slate-400 mt-2">Fonte: collector.py (yfinance info.targetMeanPrice + recommendations) + fallback deterministico</div>
+        </div>
+        <div class="bg-white border rounded-xl p-3">
+          <div class="text-[11px] font-semibold mb-2">Score</div>
+          ${[["ScoreF",selected.scoreF],["ScoreT",selected.scoreT],["ScoreTot",selected.scoreTot]].map(([k,v])=>`
+            <div class="mb-2"><div class="flex justify-between text-[11px]"><span>${k}</span><span class="mono">${v}</span></div><div class="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-slate-900" style="width:${v}%"></div></div></div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+  setTimeout(()=>drawChart(),50);
+}
+
+function drawChart(){
+  const canvas = document.getElementById('chart');
+  if(!canvas || !selected) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio||1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w*dpr; canvas.height = h*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+  const data = selected.history;
+  if(!data.length) return;
+  const highs = data.map(d=>d.high), lows = data.map(d=>d.low);
+  let min = Math.min(...lows), max = Math.max(...highs);
+  const pad=(max-min)*0.12; min-=pad; max+=pad;
+  const xStep = w / data.length;
+  const y = v=> h - ((v-min)/(max-min))*h;
+  // candele
+  data.forEach((bar,i)=>{
+    const x=i*xStep + xStep*0.15; const bw=xStep*0.7;
+    const isUp=bar.close>=bar.open;
+    ctx.fillStyle=isUp?"#10b981":"#ef4444"; ctx.strokeStyle=isUp?"#10b981":"#ef4444";
+    ctx.beginPath(); ctx.moveTo(x+bw/2, y(bar.high)); ctx.lineTo(x+bw/2, y(bar.low)); ctx.stroke();
+    const top=y(Math.max(bar.open,bar.close)); const bh=Math.max(1, Math.abs(y(bar.open)-y(bar.close)));
+    ctx.fillRect(x,top,bw,bh);
+  });
+  // SMA50
+  const closes=data.map(d=>d.close);
+  const sma50=calcSMA(closes,50);
+  ctx.strokeStyle="#f59e0b"; ctx.lineWidth=1; ctx.beginPath(); let started=false;
+  sma50.forEach((v,i)=>{ if(v===null) return; const xx=i*xStep+xStep/2; if(!started){ctx.moveTo(xx,y(v)); started=true;} else ctx.lineTo(xx,y(v)); }); ctx.stroke();
+}
+
+document.getElementById('filtroTesto').addEventListener('input', render);
+document.getElementById('filtroSettore').addEventListener('change', render);
+document.getElementById('btnReload').addEventListener('click', ()=>{
+  const btn=document.getElementById('btnReload');
+  btn.textContent='⏳ Aggiorno...';
+  btn.disabled=true;
+  fetchSnapshot().finally(()=>{ btn.textContent='🔄 Aggiorna'; btn.disabled=false; });
+});
+
+fetchSnapshot().catch(e=>{
+  document.getElementById('statusBadge').textContent="Errore";
+  document.getElementById('statusBadge').className="text-[11px] bg-red-50 text-red-700 border rounded-full px-3 py-1";
+  log("✗ Errore finale: "+e.message);
+  log("Verifica che collector.py abbia generato dati/snapshot.json e che sia pushato su main");
+});
 </script>
 <script>(function(){var loc=location.href.replace(/#.*$/,"");var ATTR_NAMES=["data-product-id","data-productid","data-product_id","product-id","productid","product_id","data-source-entity-id","source-entity-id","source_entity_id","data-product","data-metadata","data-meta"];var DATASET_KEYS=["productId","productid","product_id","sourceEntityId","sourceentityid","source_entity_id","product","metadata","meta"];function readProductId(value){if(typeof value!=="string"||value.length===0)return null;if(/^[0-9]{6,}$/.test(value))return value;var match=value.match(/(?:product(?:_|-)?id|source(?:_|-)?entity(?:_|-)?id)["'=:\s]+([0-9]{6,})/i);return match?match[1]:null}function extractProductId(start){for(var node=start;node&&node!==document.body;node=node.parentElement){for(var i=0;i<ATTR_NAMES.length;i++){var attrValue=node.getAttribute&&node.getAttribute(ATTR_NAMES[i]);var attrProductId=readProductId(attrValue);if(attrProductId)return attrProductId}var dataset=node.dataset||null;if(dataset){for(var j=0;j<DATASET_KEYS.length;j++){var dataValue=dataset[DATASET_KEYS[j]];var dataProductId=readProductId(dataValue);if(dataProductId)return dataProductId}}}return null}function isInlineMediaSlotElement(node){return !!(node&&node.getAttribute&&node.getAttribute("data-clippy-inline-media-slot")!==null)}function findInlineMediaSlot(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(isInlineMediaSlotElement(node))return node}return null}function readInlineMediaUrl(node){if(!node)return null;return node.getAttribute&&((node.getAttribute("data-clippy-inline-media-url")||node.getAttribute("data-url")||node.getAttribute("data_url")))||node.href||null}function stripHash(url){return String(url).replace(/#.*$/,"")}function urlsMatch(a,b){if(!a||!b)return false;try{return stripHash(new URL(a,loc).href)===stripHash(new URL(b,loc).href)}catch(_){return stripHash(a)===stripHash(b)}}function isFirstPartyReelUrl(value){try{var url=new URL(value,loc);if(url.protocol!=="https:")return false;var host=url.hostname.toLowerCase();var supported=host==="instagram.com"||host.endsWith(".instagram.com")||host==="facebook.com"||host.endsWith(".facebook.com");return supported&&/\/reels?\//i.test(url.pathname)}catch(_){return false}}function isInlineMediaUrlClick(node,href){var slot=findInlineMediaSlot(node);if(!slot)return false;var slotUrl=readInlineMediaUrl(slot);if(slotUrl)return urlsMatch(href,slotUrl);return isFirstPartyReelUrl(href)}function findDataHref(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(node.getAttribute){var href=node.getAttribute("data-href")||node.getAttribute("data-url");if(href)return{href:href,node:node}}}return null}var nativeOpen=window.open;window.open=function(url){if(parent!==window&&typeof url==="string"&&/^https?:\/\//.test(url)){parent.postMessage({type:"ecto:usercontent-link-click",href:url},"*");return null}return nativeOpen?nativeOpen.apply(window,arguments):null};document.addEventListener("click",function(e){var target=e.target instanceof Element?e.target:null;if(!target)return;if(parent===window)return;var a=target.closest?target.closest("a[href]"):null;if(a&&a.href&&/^https?:\/\//.test(a.href)&&a.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(a,a.href))return;var productId=extractProductId(target)||extractProductId(a);if(productId){e.preventDefault();parent.postMessage({type:"ecto-artifact-link-click",productId:productId},"*");return}e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:a.href},"*");return}var dataHref=findDataHref(target);if(dataHref&&/^https?:\/\//.test(dataHref.href)&&dataHref.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(dataHref.node,dataHref.href))return;e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:dataHref.href},"*")}},true)})();</script><script>(function(){var FOCUS_TYPE="ecto:artifact-focus-request";var CLOSE_TYPE="ecto:artifact-close-request";function focusArtifactDocument(){var body=document.body;if(!body)return;try{window.focus();}catch(e){}if(!body.hasAttribute("tabindex"))body.setAttribute("tabindex","-1");try{body.focus({preventScroll:true});}catch(e){try{body.focus();}catch(e2){}}}window.addEventListener("message",function(event){if(event.source!==window.parent)return;var data=event.data;if(!data||typeof data!=="object"||data.type!==FOCUS_TYPE)return;if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",focusArtifactDocument,{once:true});return;}focusArtifactDocument();});window.addEventListener("keydown",function(event){if(event.key!=="Escape")return;window.setTimeout(function(){if(event.defaultPrevented)return;window.parent.postMessage({type:CLOSE_TYPE},"*");},0);});})();</script></body>
 </html>
