@@ -243,28 +243,9 @@ async function fetchSnapshot(){
       log("✗ " + url + " → " + e.message);
     }
   }
-  // Demo fallback per non lasciare pagina bloccata su Avvio...
-  log("⚠ Nessuno snapshot, carico DEMO con grafico");
-  const demo = generaDemoFallback ? generaDemoFallback() : {titoli:[], generatedAt:new Date().toISOString()};
-  if(demo.titoli && demo.titoli.length){
-    snapshot = {titoli: demo.titoli.map(t=>({
-      ticker: t.ticker || t.Ticker,
-      nome: t.nome || t.Nome,
-      settore: t.settore || t.Settore || "Altro",
-      prezzo: t.prezzo || t.Prezzo || 10,
-      pe: t.pe || 10, pb: t.pb || 1, roe: t.roe || 10, divYield: t.divYield || 3, debtEquity: 0.5, cet1: 14, marketCap: 10,
-      scoreF: 50, scoreT: 50, scoreTot: 50,
-      consenso: {rating:"Hold", targetPrice: (t.prezzo||10)*1.15, tp:(t.prezzo||10)*1.15, lo:0, hi:0, buy:3, hold:5, sell:1, numAnalysts:8, upside:15},
-      history: (t.barre||[]).map(b=>({date:b.d||b.date, open:b.o||b.open, high:b.h||b.high, low:b.l||b.low, close:b.c||b.close, volume:b.v||0})),
-      f: t.f || {}
-    })), generatedAt: new Date().toISOString()};
-    document.getElementById('lastUpdate').textContent = "DEMO "+new Date().toLocaleString('it-IT');
-    document.getElementById('countInfo').textContent = snapshot.titoli.length+" titoli DEMO";
-    document.getElementById('statusBadge').textContent = "Demo";
-    render();
-    return snapshot;
-  }
-  throw new Error("Nessuno snapshot disponibile");
+  // Demo fallback - non blocca mai su Avvio...
+  log("⚠ Nessuno snapshot trovato dopo tutti i tentativi");
+  throw new Error("Nessuno snapshot disponibile - verifica che data/snapshot.json esista");
 }
 
 function render(){
