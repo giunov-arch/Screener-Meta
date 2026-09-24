@@ -24,8 +24,8 @@ jobs:
 
       - name: Install deps
         run: |
-          pip install yfinance==0.2.40 pandas==2.2.3 numpy==1.26.4 requests
-          # niente curl_cffi per evitare bug 'str' has no attribute 'name'
+          pip install yfinance==0.2.40 pandas==2.2.3 numpy==1.26.4 requests curl-cffi==0.7.1
+          # yfinance 0.2.40 + curl_cffi 0.7.1 funziona, 0.2.54 no (bug 'str has no attribute name')
 
       - name: Run collector (quello che funzionava)
         run: |
