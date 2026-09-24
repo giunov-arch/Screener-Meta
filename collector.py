@@ -58,11 +58,16 @@ PAUSA_MIN = 6.0
 PAUSA_MAX = 12.0
 
 def get_session():
-    # FIX: yfinance 0.2.54 ha bug con curl_cffi session -> "'str' object has no attribute 'name'"
-    # Disattiviamo curl_cffi per ora, usiamo solo yfinance standard con pause lunghe
-    # Se vuoi riattivarlo, usa yfinance <0.2.50 o usa workaround con yf.set_tz_cache
+    # yfinance 0.2.40 + curl_cffi funziona, 0.2.54 no -> usiamo 0.2.40
     if HAS_CFFI:
-        print("⚠️ curl_cffi trovato ma disattivato per bug yfinance 0.2.54 (causa 'str has no attribute name')")
+        try:
+            s = cffi_requests.Session(impersonate="chrome120")
+            print("✅ curl_cffi chrome120 attivo (bypass blocco Yahoo GitHub Actions)")
+            return s
+        except Exception as e:
+            print(f"curl_cffi fail: {e}")
+    else:
+        print("⚠️ curl_cffi non trovato, Yahoo potrebbe bloccare (Expecting value)")
     return None
 
 def leggi_barre(df):
@@ -117,40 +122,42 @@ def live_fondamentali(info):
 
 def scarica(voce, session):
     ticker = voce["ticker"]
-    # prova periodi diversi se 2y fallisce - SENZA session per evitare bug 'str' has no attribute 'name'
-    for period in ["2y", "1y", "6mo", "3mo"]:
-        for attempt in range(2):
-            try:
-                # FIX: non passare session a Ticker, causa bug in yfinance 0.2.54
-                tk = yf.Ticker(ticker)
-                hist = tk.history(period=period, interval="1d", auto_adjust=True)
-                if hist.empty:
-                    raise RuntimeError(f"storico vuoto period={period}")
-                barre = leggi_barre(hist)
-                if len(barre) < 30:
-                    raise RuntimeError(f"solo {len(barre)} barre")
-                info = {}
+    # prova con sessione curl_cffi prima, poi senza
+    sessions_to_try = [session, None] if session else [None]
+    for sess in sessions_to_try:
+        for period in ["2y", "1y", "6mo", "3mo"]:
+            for attempt in range(2):
                 try:
-                    info = tk.info or {}
-                except:
+                    tk = yf.Ticker(ticker, session=sess) if sess else yf.Ticker(ticker)
+                    hist = tk.history(period=period, interval="1d", auto_adjust=True)
+                    if hist.empty:
+                        raise RuntimeError(f"storico vuoto period={period}")
+                    barre = leggi_barre(hist)
+                    if len(barre) < 30:
+                        raise RuntimeError(f"solo {len(barre)} barre")
                     info = {}
-                f_live = live_fondamentali(info)
-                f_all = fondi(voce.get("f"), f_live)
-                # consenso
-                con = None
-                tp = info.get("targetMeanPrice")
-                if tp:
-                    lo = info.get("targetLowPrice") or tp
-                    hi = info.get("targetHighPrice") or tp
-                    n = info.get("numberOfAnalystOpinions") or 8
-                    con = {"tp": round(tp,2), "lo": round(lo,2), "hi": round(hi,2), "n": int(n), "b": 5, "h": 4, "s": 1}
-                return barre, f_all, con
-            except Exception as e:
-                # se errore str has no attribute name, non ritentare con session
-                if "'str' object has no attribute 'name'" in str(e):
-                    print(f"    bug yfinance rilevato, riprovo senza sessione: {e}")
-                print(f"    tentativo {period} {attempt+1} fallito: {e}")
-                time.sleep(random.uniform(3,6))
+                    try:
+                        info = tk.info or {}
+                    except:
+                        info = {}
+                    f_live = live_fondamentali(info)
+                    f_all = fondi(voce.get("f"), f_live)
+                    # consenso
+                    con = None
+                    tp = info.get("targetMeanPrice")
+                    if tp:
+                        lo = info.get("targetLowPrice") or tp
+                        hi = info.get("targetHighPrice") or tp
+                        n = info.get("numberOfAnalystOpinions") or 8
+                        con = {"tp": round(tp,2), "lo": round(lo,2), "hi": round(hi,2), "n": int(n), "b": 5, "h": 4, "s": 1}
+                    return barre, f_all, con
+                except Exception as e:
+                    err = str(e)
+                    if "Expecting value" in err:
+                        print(f"    Yahoo ha bloccato IP (Expecting value line 1 col 1) period={period} attempt={attempt+1}: {e}")
+                    else:
+                        print(f"    tentativo {period} {attempt+1} fallito: {e}")
+                    time.sleep(random.uniform(3,6))
     raise RuntimeError("tutti i periodi falliti")
 
 def main():
