@@ -28,19 +28,22 @@ jobs:
           pip install -r github-screener-italia/requirements.txt 2>/dev/null || true
           pip install yfinance==0.2.54 pandas==2.2.3 numpy==1.26.4 requests curl-cffi
 
-      - name: Run fetcher unico
+      - name: Run collector (quello che funzionava)
         run: |
-          # Un solo file: fetcher.py (ex fetcher_v4_collector_based.py rinominato)
-          if [ -f fetcher.py ]; then
-            echo "Uso fetcher.py in root"
+          set -x
+          # collector.py è quello stabile, fetcher.py è solo copia
+          if [ -f collector.py ]; then
+            echo "Uso collector.py in root"
+            python collector.py
+          elif [ -f github-screener-italia/collector.py ]; then
+            echo "Uso github-screener-italia/collector.py"
+            python github-screener-italia/collector.py
+          elif [ -f fetcher.py ]; then
+            echo "Fallback a fetcher.py"
             python fetcher.py
-          elif [ -f github-screener-italia/fetcher.py ]; then
-            echo "Uso github-screener-italia/fetcher.py"
-            python github-screener-italia/fetcher.py
           else
-            echo "ERRORE: nessun fetcher.py trovato" && ls -lh && exit 1
+            echo "Nessun collector trovato" && ls -lh && exit 1
           fi
-          echo "--- file generati ---"
           ls -lh dati/ data/ 2>/dev/null || true
 
       - name: Commit e push
@@ -54,5 +57,5 @@ jobs:
             echo "Nessun cambiamento"
             exit 0
           fi
-          git commit -m "Aggiornamento dati: $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git commit -m "Aggiornamento dati: $(date -u +'%Y-%m-%d %H:%M UTC') - collector"
           git push
