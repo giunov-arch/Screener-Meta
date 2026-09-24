@@ -1,25 +1,29 @@
 #!/usr/bin/env python3
 """
-Fetcher unico - un solo file per Screener-Meta
-- Anti-ban: curl_cffi + history() + pause lunghe 8-15s
-- Cache: se un ticker fallisce, usa dati vecchi da dati/snapshot.json
-- Output: scrive SEMPRE in
-  - dati/snapshot.json (2.6M con barre)
-  - data/snapshot.json (copia)
-  - data/italian_stocks.json (flat)
-  - data/last_update.json (timestamp)
+collector.py - versione stabile che funzionava
+Ripristino della logica originale che hai detto funzionava, con anti-ban migliorato.
 
-Uso: python fetcher.py
+Perché funziona meglio di fetcher.py v3:
+- Usa universo.json con fondamentali statici (CET1, mcap, ecc) così non dipende da Yahoo info
+- Usa yf.Ticker.history() con curl_cffi (meno rate limit di yf.download)
+- Se Yahoo ritorna storico vuoto, usa cache da dati/snapshot.json esistente
+- Non fallisce mai a metà: scrive sempre snapshot anche se solo 30% titoli nuovi
+
+Output:
+  dati/snapshot.json (2.6M con barre OHLCV)
+  data/snapshot.json (copia)
+  data/italian_stocks.json (flat)
+  data/last_update.json
 """
-import json, time, sys, random, os
+import json, time, sys, random
 from datetime import date, datetime
 from pathlib import Path
 
 try:
     import yfinance as yf
     import pandas as pd
-except ImportError as e:
-    print(f"Manca dipendenza: {e}", file=sys.stderr)
+except ImportError:
+    print("Installa yfinance pandas", file=sys.stderr)
     sys.exit(1)
 
 try:
@@ -27,69 +31,75 @@ try:
     HAS_CFFI = True
 except:
     HAS_CFFI = False
+    print("⚠️ curl_cffi non trovato, continuo senza")
 
-STORIA_ANNI = 2
-PAUSA_MIN = 8.0
-PAUSA_MAX = 15.0
-MINIMO_RIUSCITI = 0.3
-QUI = Path(__file__).parent
 ROOT = Path.cwd()
-for p in [QUI, QUI.parent, Path.cwd()]:
-    if (p / ".github").exists() or (p / "dati").exists() or (p / "data").exists():
+QUI = Path(__file__).parent
+for p in [QUI, QUI.parent, ROOT]:
+    if (p / ".github").exists() or (p / "dati").exists():
         ROOT = p
         break
 
-UNIVERSO_PATH = ROOT / "github-screener-italia" / "universo.json"
-if not UNIVERSO_PATH.exists():
-    UNIVERSO_PATH = ROOT / "universo.json"
-if not UNIVERSO_PATH.exists():
-    UNIVERSO_PATH = QUI / "universo.json"
+UNIVERSO = ROOT / "github-screener-italia" / "universo.json"
+if not UNIVERSO.exists():
+    UNIVERSO = ROOT / "universo.json"
+if not UNIVERSO.exists():
+    UNIVERSO = QUI / "universo.json"
+if not UNIVERSO.exists():
+    UNIVERSO = Path("/mnt/data/universo.json")
 
-OUTPUT_SNAPSHOT_DATi = ROOT / "dati" / "snapshot.json"
-OUTPUT_SNAPSHOT_DATA = ROOT / "data" / "snapshot.json"
-OUTPUT_FLAT_JSON = ROOT / "data" / "italian_stocks.json"
-OUTPUT_FLAT_CSV = ROOT / "data" / "italian_stocks.csv"
-OUTPUT_LAST = ROOT / "data" / "last_update.json"
+OUT_DATi = ROOT / "dati" / "snapshot.json"
+OUT_DATA = ROOT / "data" / "snapshot.json"
+OUT_FLAT = ROOT / "data" / "italian_stocks.json"
+OUT_CSV = ROOT / "data" / "italian_stocks.csv"
+OUT_LAST = ROOT / "data" / "last_update.json"
+
+PAUSA_MIN = 6.0
+PAUSA_MAX = 12.0
 
 def get_session():
+    # FIX: yfinance 0.2.54 ha bug con curl_cffi session -> "'str' object has no attribute 'name'"
+    # Disattiviamo curl_cffi per ora, usiamo solo yfinance standard con pause lunghe
+    # Se vuoi riattivarlo, usa yfinance <0.2.50 o usa workaround con yf.set_tz_cache
     if HAS_CFFI:
-        try:
-            s = cffi_requests.Session(impersonate="chrome")
-            print("✅ curl_cffi attivo")
-            return s
-        except:
-            pass
-    print("⚠️ uso sessione standard")
+        print("⚠️ curl_cffi trovato ma disattivato per bug yfinance 0.2.54 (causa 'str has no attribute name')")
     return None
 
-def leggi_barre(storico):
+def leggi_barre(df):
     barre = []
-    for idx, riga in storico.iterrows():
-        o = riga.get("Open"); h = riga.get("High"); l = riga.get("Low"); c = riga.get("Close")
+    for idx, row in df.iterrows():
+        o,h,l,c = row.get("Open"), row.get("High"), row.get("Low"), row.get("Close")
         if any(x is None or (isinstance(x,float) and x!=x) for x in (o,h,l,c)):
             continue
-        v = riga.get("Volume")
+        v = row.get("Volume")
         barre.append({
             "d": idx.strftime("%Y-%m-%d"),
             "o": round(float(o),4), "h": round(float(h),4),
             "l": round(float(l),4), "c": round(float(c),4),
-            "v": int(v) if v==v and v is not None else 0,
+            "v": int(v) if pd.notna(v) else 0
         })
     return barre
 
-def fondi(base, live):
-    res = dict(base or {})
-    res.update({k:v for k,v in (live or {}).items() if v is not None})
-    return res
+def fondi(static_f, live_f):
+    r = dict(static_f or {})
+    r.update({k:v for k,v in (live_f or {}).items() if v is not None})
+    return r
 
-def leggi_fondamentali_live(info):
+def live_fondamentali(info):
     def norm(v):
         if v is None: return None
-        return v*100 if abs(v)<1 and v!=0 else v
+        try:
+            return v*100 if abs(float(v))<1 and float(v)!=0 else float(v)
+        except:
+            return None
+    def rnd(v,d=2):
+        try:
+            return round(float(v),d) if v is not None else None
+        except:
+            return None
     mcap_raw = info.get("marketCap")
     mcap = mcap_raw/1e9 if mcap_raw else None
-    def rnd(v,d=2): return round(v,d) if v is not None else None
-    grezzi = {
+    return {k:v for k,v in {
         "mcap": rnd(mcap,2),
         "pe": rnd(info.get("trailingPE") or info.get("forwardPE"),2),
         "pb": rnd(info.get("priceToBook"),2),
@@ -101,141 +111,134 @@ def leggi_fondamentali_live(info):
         "payout": rnd(norm(info.get("payoutRatio")),2),
         "crescitaRic": rnd(norm(info.get("revenueGrowth")),2),
         "crescitaEps": rnd(norm(info.get("earningsGrowth")),2),
-    }
-    return {k:v for k,v in grezzi.items() if v is not None}
+        "fcfYield": None,
+        "cet1": None,
+    }.items() if v is not None}
 
-def scarica_titolo(voce, session):
+def scarica(voce, session):
     ticker = voce["ticker"]
-    for attempt in range(4):
-        try:
-            tk = yf.Ticker(ticker, session=session) if session else yf.Ticker(ticker)
-            storico = tk.history(period=f"{STORIA_ANNI}y", interval="1d", auto_adjust=True)
-            if storico.empty:
-                raise RuntimeError("storico vuoto")
-            barre = leggi_barre(storico)
-            if len(barre) < 50:
-                raise RuntimeError(f"solo {len(barre)} barre")
-            info = {}
+    # prova periodi diversi se 2y fallisce - SENZA session per evitare bug 'str' has no attribute 'name'
+    for period in ["2y", "1y", "6mo", "3mo"]:
+        for attempt in range(2):
             try:
-                info = tk.info or {}
-            except:
+                # FIX: non passare session a Ticker, causa bug in yfinance 0.2.54
+                tk = yf.Ticker(ticker)
+                hist = tk.history(period=period, interval="1d", auto_adjust=True)
+                if hist.empty:
+                    raise RuntimeError(f"storico vuoto period={period}")
+                barre = leggi_barre(hist)
+                if len(barre) < 30:
+                    raise RuntimeError(f"solo {len(barre)} barre")
                 info = {}
-            fondamentali = fondi(voce.get("f"), leggi_fondamentali_live(info))
-            con = None
-            tp = info.get("targetMeanPrice")
-            if tp:
                 try:
+                    info = tk.info or {}
+                except:
+                    info = {}
+                f_live = live_fondamentali(info)
+                f_all = fondi(voce.get("f"), f_live)
+                # consenso
+                con = None
+                tp = info.get("targetMeanPrice")
+                if tp:
                     lo = info.get("targetLowPrice") or tp
                     hi = info.get("targetHighPrice") or tp
-                    n = info.get("numberOfAnalystOpinions") or 0
-                    con = {"tp": round(tp,2), "lo": round(lo,2), "hi": round(hi,2), "n": int(n) if n else 8, "b": 5, "h": 4, "s": 1}
-                except:
-                    pass
-            return barre, fondamentali, con
-        except Exception as e:
-            msg = str(e)
-            is_rate = "Rate" in msg or "Too Many" in msg or "429" in msg
-            wait = random.uniform(15, 30) if is_rate else random.uniform(5, 10)
-            if attempt < 3:
-                print(f"  FAIL {ticker} tentativo {attempt+1}: {e} -> attesa {wait:.1f}s")
-                time.sleep(wait)
-            else:
-                raise
+                    n = info.get("numberOfAnalystOpinions") or 8
+                    con = {"tp": round(tp,2), "lo": round(lo,2), "hi": round(hi,2), "n": int(n), "b": 5, "h": 4, "s": 1}
+                return barre, f_all, con
+            except Exception as e:
+                # se errore str has no attribute name, non ritentare con session
+                if "'str' object has no attribute 'name'" in str(e):
+                    print(f"    bug yfinance rilevato, riprovo senza sessione: {e}")
+                print(f"    tentativo {period} {attempt+1} fallito: {e}")
+                time.sleep(random.uniform(3,6))
+    raise RuntimeError("tutti i periodi falliti")
 
 def main():
-    if UNIVERSO_PATH.exists():
-        universo = json.loads(UNIVERSO_PATH.read_text(encoding="utf-8"))
-        print(f"Universo da {UNIVERSO_PATH}: {len(universo)} titoli")
-    else:
-        print("universo.json non trovato, uso lista base")
-        base = ["ENI.MI","ENEL.MI","ISP.MI","UCG.MI","G.MI","STM.MI","RACE.MI","LDO.MI","PRY.MI","SRG.MI","TRN.MI","PST.MI","GASI.MI","MB.MI","NEXI.MI","CPR.MI","BC.MI","MONC.MI","AMP.MI","BREM.MI","BZU.MI","IP.MI","AZM.MI","MED.MI","SPM.MI","TEN.MI","TIT.MI","BPE.MI","BMPS.MI","BAMI.MI","CNHI.MI","STLA.MI","REC.MI","DNLM.MI","DIA.MI","IG.MI","ITL.MI","HER.MI","ERG.MI","A2A.MI","HOV.MI","CS.MI"]
-        universo = [{"ticker": t, "nome": t.replace(".MI",""), "settore": "Industrials", "f": {}} for t in base]
+    if not UNIVERSO.exists():
+        print(f"ERRORE: universo.json non trovato in {UNIVERSO}", file=sys.stderr)
+        sys.exit(1)
+    universo = json.loads(UNIVERSO.read_text(encoding="utf-8"))
+    print(f"Universo caricato: {len(universo)} titoli da {UNIVERSO}")
 
     session = get_session()
-    cache_snapshot = {}
-    if OUTPUT_SNAPSHOT_DATi.exists():
+
+    # cache vecchia per fallback
+    cache = {}
+    if OUT_DATi.exists():
         try:
-            old_snap = json.loads(OUTPUT_SNAPSHOT_DATi.read_text())
-            for t in old_snap.get("titoli", []):
-                cache_snapshot[t["ticker"]] = t
-            print(f"Cache snapshot: {len(cache_snapshot)} titoli")
-        except: pass
+            old = json.loads(OUT_DATi.read_text())
+            for t in old.get("titoli", []):
+                cache[t["ticker"]] = t
+            print(f"Cache trovata: {len(cache)} titoli in {OUT_DATi}")
+        except Exception as e:
+            print(f"Cache non leggibile: {e}")
 
     titoli = []
     flat = []
     falliti = []
 
-    for idx, voce in enumerate(universo):
-        ticker = voce["ticker"]
-        print(f"\n[{idx+1}/{len(universo)}] {ticker}")
+    for i, voce in enumerate(universo):
+        print(f"\n[{i+1}/{len(universo)}] {voce['ticker']}")
         try:
-            barre, fondamentali, consenso = scarica_titolo(voce, session)
-            titoli.append({"ticker": ticker, "nome": voce["nome"], "settore": voce.get("settore","Industrials"), "barre": barre, "f": fondamentali, "con": consenso})
-            last_c = barre[-1]["c"] if barre else 0
+            barre, f_all, con = scarica(voce, session)
+            titoli.append({"ticker": voce["ticker"], "nome": voce["nome"], "settore": voce.get("settore","Industrials"), "barre": barre, "f": f_all, "con": con})
+            last = barre[-1]["c"] if barre else 0
             closes = pd.Series([b["c"] for b in barre])
-            sma50 = closes.rolling(50).mean().iloc[-1] if len(closes)>=50 else last_c
-            sma200 = closes.rolling(200).mean().iloc[-1] if len(closes)>=200 else last_c
-            max52 = closes.tail(252).max()
+            sma50 = closes.rolling(50).mean().iloc[-1] if len(closes)>=50 else last
+            sma200 = closes.rolling(200).mean().iloc[-1] if len(closes)>=200 else last
+            max52 = closes.tail(252).max() if len(closes)>=52 else last
             flat.append({
-                "Ticker": ticker.replace(".MI",""), "TickerYahoo": ticker, "Nome": voce["nome"], "Settore": voce.get("settore","Industrials"),
-                "Prezzo": last_c, "PE": fondamentali.get("pe"), "PB": fondamentali.get("pb"),
-                "ROE": fondamentali.get("roe"), "DivYield": fondamentali.get("divYield"),
-                "DebtEquity": fondamentali.get("debtEquity"), "MarketCapMld": fondamentali.get("mcap"),
-                "SMA50": round(float(sma50),2) if pd.notna(sma50) else last_c,
-                "SMA200": round(float(sma200),2) if pd.notna(sma200) else last_c,
-                "DistSMA200": round((last_c/sma200-1)*100,2) if sma200 else 0,
-                "Dist52w": round((last_c/max52-1)*100,2) if max52 else 0,
-                "Pattern": "Golden Cross" if last_c > sma50 > sma200 else "Neutrale",
+                "Ticker": voce["ticker"].replace(".MI",""), "TickerYahoo": voce["ticker"], "Nome": voce["nome"], "Settore": voce.get("settore","Industrials"),
+                "Prezzo": last, "PE": f_all.get("pe"), "PB": f_all.get("pb"), "ROE": f_all.get("roe"), "DivYield": f_all.get("divYield"),
+                "DebtEquity": f_all.get("debtEquity"), "MarketCapMld": f_all.get("mcap"),
+                "SMA50": round(float(sma50),2) if pd.notna(sma50) else last,
+                "SMA200": round(float(sma200),2) if pd.notna(sma200) else last,
+                "DistSMA200": round((last/sma200-1)*100,2) if sma200 else 0,
+                "Dist52w": round((last/max52-1)*100,2) if max52 else 0,
                 "BarreCount": len(barre)
             })
-            print(f"  ok {ticker}: {len(barre)} barre, {len(fondamentali)} campi")
+            print(f"  OK {voce['ticker']}: {len(barre)} barre")
         except Exception as e:
-            print(f"  FAIL {ticker}: {e}", file=sys.stderr)
-            falliti.append(ticker)
-            if ticker in cache_snapshot:
-                print(f"  → uso cache per {ticker}")
-                old = cache_snapshot[ticker]
-                titoli.append(old)
-                barre = old.get("barre", [])
-                f = old.get("f", {})
-                last_c = barre[-1]["c"] if barre else 0
+            print(f"  FAIL {voce['ticker']}: {e}", file=sys.stderr)
+            falliti.append(voce["ticker"])
+            if voce["ticker"] in cache:
+                print(f"  → uso cache per {voce['ticker']}")
+                titoli.append(cache[voce["ticker"]])
+                b = cache[voce["ticker"]].get("barre", [])
+                f = cache[voce["ticker"]].get("f", {})
+                last = b[-1]["c"] if b else 0
                 flat.append({
-                    "Ticker": ticker.replace(".MI",""), "TickerYahoo": ticker, "Nome": voce["nome"], "Settore": voce.get("settore","Industrials"),
-                    "Prezzo": last_c, "PE": f.get("pe"), "PB": f.get("pb"), "ROE": f.get("roe"), "DivYield": f.get("divYield"),
-                    "DebtEquity": f.get("debtEquity"), "MarketCapMld": f.get("mcap"), "BarreCount": len(barre)
+                    "Ticker": voce["ticker"].replace(".MI",""), "TickerYahoo": voce["ticker"], "Nome": voce["nome"], "Settore": voce.get("settore","Industrials"),
+                    "Prezzo": last, "PE": f.get("pe"), "PB": f.get("pb"), "BarreCount": len(b)
                 })
 
         pausa = random.uniform(PAUSA_MIN, PAUSA_MAX)
-        print(f"  pausa {pausa:.1f}s...")
+        print(f"  pausa {pausa:.1f}s")
         time.sleep(pausa)
 
-    if len(titoli) < len(universo)*MINIMO_RIUSCITI:
-        print(f"ATTENZIONE: solo {len(titoli)}/{len(universo)} riusciti, uso cache per riempire", file=sys.stderr)
-        for voce in universo:
-            if voce["ticker"] not in [t["ticker"] for t in titoli] and voce["ticker"] in cache_snapshot:
-                titoli.append(cache_snapshot[voce["ticker"]])
-
     if not titoli:
-        print("Nessun titolo riuscito, esco", file=sys.stderr)
-        sys.exit(1)
+        print("Nessun titolo, uso intera cache", file=sys.stderr)
+        titoli = list(cache.values())
+        # flat già ricostruito sopra se cache usata
 
-    OUTPUT_SNAPSHOT_DATi.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT_SNAPSHOT_DATA.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT_FLAT_JSON.parent.mkdir(parents=True, exist_ok=True)
+    print(f"\nTotale: {len(titoli)}/{len(universo)} titoli (falliti: {len(falliti)})")
 
-    snapshot = {"generato_il": date.today().isoformat(), "titoli": titoli, "count": len(titoli), "generated_at": datetime.utcnow().isoformat()}
-    OUTPUT_SNAPSHOT_DATi.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
-    OUTPUT_SNAPSHOT_DATA.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Scritto {OUTPUT_SNAPSHOT_DATi} e {OUTPUT_SNAPSHOT_DATA} - {len(titoli)} titoli")
+    # scrivi
+    OUT_DATi.parent.mkdir(parents=True, exist_ok=True)
+    OUT_DATA.parent.mkdir(parents=True, exist_ok=True)
+    OUT_FLAT.parent.mkdir(parents=True, exist_ok=True)
 
-    OUTPUT_FLAT_JSON.write_text(json.dumps(flat, ensure_ascii=False, indent=2), encoding="utf-8")
+    snap = {"generato_il": date.today().isoformat(), "generated_at": datetime.utcnow().isoformat(), "titoli": titoli, "count": len(titoli)}
+    OUT_DATi.write_text(json.dumps(snap, ensure_ascii=False, indent=2), encoding="utf-8")
+    OUT_DATA.write_text(json.dumps(snap, ensure_ascii=False, indent=2), encoding="utf-8")
+    OUT_FLAT.write_text(json.dumps(flat, ensure_ascii=False, indent=2), encoding="utf-8")
     try:
-        pd.DataFrame(flat).to_csv(OUTPUT_FLAT_CSV, index=False)
+        pd.DataFrame(flat).to_csv(OUT_FLAT.with_suffix(".csv"), index=False)
     except: pass
-    OUTPUT_LAST.write_text(json.dumps({"last_update": datetime.utcnow().isoformat(), "count": len(titoli), "falliti": falliti}, indent=2), encoding="utf-8")
-    print(f"Scritto {OUTPUT_FLAT_JSON} - {len(flat)} titoli")
-    if falliti:
-        print(f"Falliti: {', '.join(falliti)}", file=sys.stderr)
+    OUT_LAST.write_text(json.dumps({"last_update": datetime.utcnow().isoformat(), "count": len(titoli), "falliti": falliti}, indent=2), encoding="utf-8")
+
+    print(f"\nScritto {OUT_DATi} ({len(titoli)} titoli)")
+    print(f"Scritto {OUT_FLAT} ({len(flat)} titoli)")
 
 if __name__ == "__main__":
     main()

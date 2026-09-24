@@ -58,13 +58,11 @@ PAUSA_MIN = 6.0
 PAUSA_MAX = 12.0
 
 def get_session():
+    # FIX: yfinance 0.2.54 ha bug con curl_cffi session -> "'str' object has no attribute 'name'"
+    # Disattiviamo curl_cffi per ora, usiamo solo yfinance standard con pause lunghe
+    # Se vuoi riattivarlo, usa yfinance <0.2.50 o usa workaround con yf.set_tz_cache
     if HAS_CFFI:
-        try:
-            s = cffi_requests.Session(impersonate="chrome120")
-            print("✅ curl_cffi chrome120 attivo")
-            return s
-        except Exception as e:
-            print(f"curl_cffi fail: {e}")
+        print("⚠️ curl_cffi trovato ma disattivato per bug yfinance 0.2.54 (causa 'str has no attribute name')")
     return None
 
 def leggi_barre(df):
@@ -119,11 +117,12 @@ def live_fondamentali(info):
 
 def scarica(voce, session):
     ticker = voce["ticker"]
-    # prova periodi diversi se 2y fallisce
-    for period in ["2y", "1y", "6mo"]:
+    # prova periodi diversi se 2y fallisce - SENZA session per evitare bug 'str' has no attribute 'name'
+    for period in ["2y", "1y", "6mo", "3mo"]:
         for attempt in range(2):
             try:
-                tk = yf.Ticker(ticker, session=session) if session else yf.Ticker(ticker)
+                # FIX: non passare session a Ticker, causa bug in yfinance 0.2.54
+                tk = yf.Ticker(ticker)
                 hist = tk.history(period=period, interval="1d", auto_adjust=True)
                 if hist.empty:
                     raise RuntimeError(f"storico vuoto period={period}")
@@ -147,6 +146,9 @@ def scarica(voce, session):
                     con = {"tp": round(tp,2), "lo": round(lo,2), "hi": round(hi,2), "n": int(n), "b": 5, "h": 4, "s": 1}
                 return barre, f_all, con
             except Exception as e:
+                # se errore str has no attribute name, non ritentare con session
+                if "'str' object has no attribute 'name'" in str(e):
+                    print(f"    bug yfinance rilevato, riprovo senza sessione: {e}")
                 print(f"    tentativo {period} {attempt+1} fallito: {e}")
                 time.sleep(random.uniform(3,6))
     raise RuntimeError("tutti i periodi falliti")
