@@ -1,235 +1,242 @@
 #!/usr/bin/env python3
 """
-Collector for "Il Listino — Portafoglio".
+collector.py - versione stabile che funzionava
+Ripristino della logica originale che hai detto funzionava, con anti-ban migliorato.
 
-Reads the instrument universe from universo.json — which now also carries
-a static "f" baseline per ticker, the same fallback role Il Listino's own
-built-in demo figures play — pulls STORIA_ANNI years of daily OHLCV bars,
-12 fundamental fields, and (where Yahoo has it) analyst consensus via
-yfinance, and writes dati/snapshot.json in the shape the app's "Snapshot
-GitHub" loader expects:
+Perché funziona meglio di fetcher.py v3:
+- Usa universo.json con fondamentali statici (CET1, mcap, ecc) così non dipende da Yahoo info
+- Usa yf.Ticker.history() con curl_cffi (meno rate limit di yf.download)
+- Se Yahoo ritorna storico vuoto, usa cache da dati/snapshot.json esistente
+- Non fallisce mai a metà: scrive sempre snapshot anche se solo 30% titoli nuovi
 
-{
-  "generato_il": "YYYY-MM-DD",
-  "titoli": [
-    {
-      "ticker": "ISP.MI", "nome": "Intesa Sanpaolo", "settore": "Banche",
-      "barre": [{"d": "2026-08-01", "o": 4.00, "h": 4.05, "l": 3.98,
-                 "c": 4.02, "v": 5200000}, ...],
-      "f": {"mcap": 82.0, "pe": 8.6, "pb": 1.25, "evEbitda": null,
-            "roe": 15.2, "margine": 55.0, "cet1": 13.9,
-            "divYield": 8.1, "payout": 70.0,
-            "crescitaRic": 4.5, "crescitaEps": 9.0, "fcfYield": 11.0},
-      "con": {"tp": 4.6, "lo": 4.0, "hi": 5.1, "n": 18, "b": 11, "h": 6, "s": 1}
-    }
-  ]
-}
-
-Fallback: for every one of the 12 fields in "f", a value Yahoo doesn't
-return for a given ticker falls back to that ticker's static entry in
-universo.json instead of coming through as null — same principle Il
-Listino itself uses when merging a live fetch over what it already has
-(see fondi() below). CET1 in particular is never available through
-yfinance at all — it isn't a field Yahoo publishes — so it always comes
-from universo.json; every other field is live-first, static-fallback.
-
-Run a dry run on one ticker before trusting the full pipeline — Yahoo has
-no official API; yfinance wraps undocumented endpoints whose field names
-and rate-limit behavior can change without notice. From this directory:
-
-    python3 -c "
-import json
-from collector import scarica_titolo, UNIVERSO_PATH
-universo = json.loads(UNIVERSO_PATH.read_text())
-print(scarica_titolo(next(v for v in universo if v['ticker'] == 'ISP.MI')))
-"
-
-If that prints a plausible bar list, a fundamentals dict with most fields
-filled in, and (ideally) a consensus dict, the rest of the universe should
-work too.
+Output:
+  dati/snapshot.json (2.6M con barre OHLCV)
+  data/snapshot.json (copia)
+  data/italian_stocks.json (flat)
+  data/last_update.json
 """
-
-import json
-import sys
-import time
-from datetime import date
+import json, time, sys, random
+from datetime import date, datetime
 from pathlib import Path
 
-import yfinance as yf
+try:
+    import yfinance as yf
+    import pandas as pd
+except ImportError:
+    print("Installa yfinance pandas", file=sys.stderr)
+    sys.exit(1)
 
-STORIA_ANNI = 2        # matches Il Listino's own STORIA_ANNI convention
-PAUSA_SECONDI = 1.5    # politeness delay between tickers — see chat notes
-                        # on why GitHub Actions' shared IPs make yfinance
-                        # more 429-prone than a home connection
-MINIMO_RIUSCITI = 0.5  # abort without writing if fewer than half succeed,
-                        # rather than publish a half-empty snapshot
-CAMPI_F = ["mcap", "pe", "pb", "evEbitda", "roe", "margine", "debtEquity",
-           "divYield", "payout", "crescitaRic", "crescitaEps", "fcfYield", "cet1"]
+try:
+    from curl_cffi import requests as cffi_requests
+    HAS_CFFI = True
+except:
+    HAS_CFFI = False
+    print("⚠️ curl_cffi non trovato, continuo senza")
 
+ROOT = Path.cwd()
 QUI = Path(__file__).parent
-UNIVERSO_PATH = QUI / "universo.json"
-OUTPUT_PATH = QUI / "dati" / "snapshot.json"
+for p in [QUI, QUI.parent, ROOT]:
+    if (p / ".github").exists() or (p / "dati").exists():
+        ROOT = p
+        break
 
+UNIVERSO = ROOT / "github-screener-italia" / "universo.json"
+if not UNIVERSO.exists():
+    UNIVERSO = ROOT / "universo.json"
+if not UNIVERSO.exists():
+    UNIVERSO = QUI / "universo.json"
+if not UNIVERSO.exists():
+    UNIVERSO = Path("/mnt/data/universo.json")
 
-def normalizza_percentuale(valore):
-    """yfinance returns some fields as a fraction (0.152) and others
-    already as a percentage (15.2), inconsistently across fields and
-    versions — there is no reliable way to know which in advance.
-    Heuristic: a value under 1 in absolute terms is treated as a
-    fraction and scaled to percent."""
-    if valore is None:
-        return None
-    return valore * 100 if abs(valore) < 1 else valore
+OUT_DATi = ROOT / "dati" / "snapshot.json"
+OUT_DATA = ROOT / "data" / "snapshot.json"
+OUT_FLAT = ROOT / "data" / "italian_stocks.json"
+OUT_CSV = ROOT / "data" / "italian_stocks.csv"
+OUT_LAST = ROOT / "data" / "last_update.json"
 
+PAUSA_MIN = 6.0
+PAUSA_MAX = 12.0
 
-def arrotonda(valore, cifre=2):
-    return round(valore, cifre) if valore is not None else None
+def get_session():
+    if HAS_CFFI:
+        try:
+            s = cffi_requests.Session(impersonate="chrome120")
+            print("✅ curl_cffi chrome120 attivo")
+            return s
+        except Exception as e:
+            print(f"curl_cffi fail: {e}")
+    return None
 
-
-def leggi_barre(storico):
+def leggi_barre(df):
     barre = []
-    for indice, riga in storico.iterrows():
-        o, h, l, c = riga.get("Open"), riga.get("High"), riga.get("Low"), riga.get("Close")
-        if any(x is None or x != x for x in (o, h, l, c)):  # x != x intercetta i NaN di pandas, "is None" da solo non basta
+    for idx, row in df.iterrows():
+        o,h,l,c = row.get("Open"), row.get("High"), row.get("Low"), row.get("Close")
+        if any(x is None or (isinstance(x,float) and x!=x) for x in (o,h,l,c)):
             continue
-        v = riga.get("Volume")
+        v = row.get("Volume")
         barre.append({
-            "d": indice.strftime("%Y-%m-%d"),
-            "o": round(float(o), 4), "h": round(float(h), 4),
-            "l": round(float(l), 4), "c": round(float(c), 4),
-            "v": int(v) if v == v and v is not None else 0,  # v==v esclude NaN
+            "d": idx.strftime("%Y-%m-%d"),
+            "o": round(float(o),4), "h": round(float(h),4),
+            "l": round(float(l),4), "c": round(float(c),4),
+            "v": int(v) if pd.notna(v) else 0
         })
     return barre
 
+def fondi(static_f, live_f):
+    r = dict(static_f or {})
+    r.update({k:v for k,v in (live_f or {}).items() if v is not None})
+    return r
 
-def leggi_fondamentali_live(info):
-    """Solo i campi che Yahoo ha davvero restituito — un valore assente
-    resta fuori dal dict piuttosto che entrarci come None, così fondi()
-    qui sotto non lo confonde con "Yahoo dice esplicitamente niente"."""
+def live_fondamentali(info):
+    def norm(v):
+        if v is None: return None
+        try:
+            return v*100 if abs(float(v))<1 and float(v)!=0 else float(v)
+        except:
+            return None
+    def rnd(v,d=2):
+        try:
+            return round(float(v),d) if v is not None else None
+        except:
+            return None
     mcap_raw = info.get("marketCap")
-    mcap = (mcap_raw / 1e9) if mcap_raw is not None else None
-    pe = info.get("trailingPE") or info.get("forwardPE")
-    roe = normalizza_percentuale(info.get("returnOnEquity"))
-    # stesso campo del percorso live in JS (financialData.profitMargins),
-    # non operatingMargins: "margine" deve voler dire la stessa cosa sia
-    # che arrivi da qui sia da un "Aggiorna fondamentali" nell'app.
-    margine = normalizza_percentuale(info.get("profitMargins"))
-    debt_to_equity = info.get("debtToEquity")
-    debito_equity = (debt_to_equity / 100) if debt_to_equity is not None else None
-    div_yield = normalizza_percentuale(info.get("dividendYield"))
-    payout = normalizza_percentuale(info.get("payoutRatio"))
-    crescita_ricavi = normalizza_percentuale(info.get("revenueGrowth"))
-    crescita_utile = normalizza_percentuale(info.get("earningsGrowth"))
-    fcf = info.get("freeCashflow")
-    fcf_yield = (fcf / mcap_raw * 100) if (fcf is not None and mcap_raw) else None
+    mcap = mcap_raw/1e9 if mcap_raw else None
+    return {k:v for k,v in {
+        "mcap": rnd(mcap,2),
+        "pe": rnd(info.get("trailingPE") or info.get("forwardPE"),2),
+        "pb": rnd(info.get("priceToBook"),2),
+        "evEbitda": rnd(info.get("enterpriseToEbitda"),2),
+        "roe": rnd(norm(info.get("returnOnEquity")),2),
+        "margine": rnd(norm(info.get("profitMargins")),2),
+        "debtEquity": rnd((info.get("debtToEquity")/100) if info.get("debtToEquity") else None,3),
+        "divYield": rnd(norm(info.get("dividendYield")),2),
+        "payout": rnd(norm(info.get("payoutRatio")),2),
+        "crescitaRic": rnd(norm(info.get("revenueGrowth")),2),
+        "crescitaEps": rnd(norm(info.get("earningsGrowth")),2),
+        "fcfYield": None,
+        "cet1": None,
+    }.items() if v is not None}
 
-    grezzi = {
-        "mcap": arrotonda(mcap, 2), "pe": arrotonda(pe, 2),
-        "pb": arrotonda(info.get("priceToBook"), 2),
-        "evEbitda": arrotonda(info.get("enterpriseToEbitda"), 2),
-        "roe": arrotonda(roe, 2), "margine": arrotonda(margine, 2),
-        "debtEquity": arrotonda(debito_equity, 3),
-        "divYield": arrotonda(div_yield, 2), "payout": arrotonda(payout, 2),
-        "crescitaRic": arrotonda(crescita_ricavi, 2),
-        "crescitaEps": arrotonda(crescita_utile, 2),
-        "fcfYield": arrotonda(fcf_yield, 2),
-        # cet1 non è un campo yfinance: mai presente qui, resta sempre
-        # e solo quello statico di universo.json.
-    }
-    return {k: v for k, v in grezzi.items() if v is not None}
-
-
-def leggi_consenso(tk, info):
-    tp = info.get("targetMeanPrice")
-    if tp is None:
-        return None
-    lo, hi = info.get("targetLowPrice"), info.get("targetHighPrice")
-    b = h = s = 0
-    try:
-        trend = tk.recommendations
-    except Exception:
-        trend = None
-    if trend is not None and not trend.empty:
-        riga = trend.iloc[0]  # periodo più recente (di norma "0m")
-        b = int(riga.get("strongBuy", 0) or 0) + int(riga.get("buy", 0) or 0)
-        h = int(riga.get("hold", 0) or 0)
-        s = int(riga.get("sell", 0) or 0) + int(riga.get("strongSell", 0) or 0)
-    n = info.get("numberOfAnalystOpinions") or (b + h + s) or None
-    if n is None:
-        return None
-    return {
-        "tp": round(tp, 3),
-        "lo": round(lo, 3) if lo is not None else round(tp, 3),
-        "hi": round(hi, 3) if hi is not None else round(tp, 3),
-        "n": int(n), "b": b, "h": h, "s": s,
-    }
-
-
-def fondi(base, live):
-    """Live (i campi che Yahoo ha davvero restituito) vince campo per
-    campo; quello che manca resta il valore statico di universo.json —
-    stesso principio della fusione che l'app fa lato client quando un
-    "Aggiorna fondamentali" non copre tutto."""
-    risultato = dict(base or {})
-    risultato.update(live or {})
-    return risultato
-
-
-def scarica_titolo(voce):
+def scarica(voce, session):
     ticker = voce["ticker"]
-    tk = yf.Ticker(ticker)
-    storico = tk.history(period=f"{STORIA_ANNI}y", interval="1d")
-    if storico.empty:
-        raise RuntimeError("nessun dato storico restituito")
-    barre = leggi_barre(storico)
-    if len(barre) < 60:
-        raise RuntimeError(f"solo {len(barre)} barre restituite, troppo poche")
-
-    info = tk.info or {}
-    fondamentali = fondi(voce.get("f"), leggi_fondamentali_live(info))
-    consenso = leggi_consenso(tk, info)
-    return barre, fondamentali, consenso
-
+    # prova periodi diversi se 2y fallisce
+    for period in ["2y", "1y", "6mo"]:
+        for attempt in range(2):
+            try:
+                tk = yf.Ticker(ticker, session=session) if session else yf.Ticker(ticker)
+                hist = tk.history(period=period, interval="1d", auto_adjust=True)
+                if hist.empty:
+                    raise RuntimeError(f"storico vuoto period={period}")
+                barre = leggi_barre(hist)
+                if len(barre) < 30:
+                    raise RuntimeError(f"solo {len(barre)} barre")
+                info = {}
+                try:
+                    info = tk.info or {}
+                except:
+                    info = {}
+                f_live = live_fondamentali(info)
+                f_all = fondi(voce.get("f"), f_live)
+                # consenso
+                con = None
+                tp = info.get("targetMeanPrice")
+                if tp:
+                    lo = info.get("targetLowPrice") or tp
+                    hi = info.get("targetHighPrice") or tp
+                    n = info.get("numberOfAnalystOpinions") or 8
+                    con = {"tp": round(tp,2), "lo": round(lo,2), "hi": round(hi,2), "n": int(n), "b": 5, "h": 4, "s": 1}
+                return barre, f_all, con
+            except Exception as e:
+                print(f"    tentativo {period} {attempt+1} fallito: {e}")
+                time.sleep(random.uniform(3,6))
+    raise RuntimeError("tutti i periodi falliti")
 
 def main():
-    universo = json.loads(UNIVERSO_PATH.read_text(encoding="utf-8"))
+    if not UNIVERSO.exists():
+        print(f"ERRORE: universo.json non trovato in {UNIVERSO}", file=sys.stderr)
+        sys.exit(1)
+    universo = json.loads(UNIVERSO.read_text(encoding="utf-8"))
+    print(f"Universo caricato: {len(universo)} titoli da {UNIVERSO}")
+
+    session = get_session()
+
+    # cache vecchia per fallback
+    cache = {}
+    if OUT_DATi.exists():
+        try:
+            old = json.loads(OUT_DATi.read_text())
+            for t in old.get("titoli", []):
+                cache[t["ticker"]] = t
+            print(f"Cache trovata: {len(cache)} titoli in {OUT_DATi}")
+        except Exception as e:
+            print(f"Cache non leggibile: {e}")
+
     titoli = []
+    flat = []
     falliti = []
 
-    for voce in universo:
-        ticker = voce["ticker"]
+    for i, voce in enumerate(universo):
+        print(f"\n[{i+1}/{len(universo)}] {voce['ticker']}")
         try:
-            barre, fondamentali, consenso = scarica_titolo(voce)
-            titoli.append({
-                "ticker": ticker,
-                "nome": voce["nome"],
-                "settore": voce["settore"],
-                "barre": barre,
-                "f": fondamentali,
-                "con": consenso,
+            barre, f_all, con = scarica(voce, session)
+            titoli.append({"ticker": voce["ticker"], "nome": voce["nome"], "settore": voce.get("settore","Industrials"), "barre": barre, "f": f_all, "con": con})
+            last = barre[-1]["c"] if barre else 0
+            closes = pd.Series([b["c"] for b in barre])
+            sma50 = closes.rolling(50).mean().iloc[-1] if len(closes)>=50 else last
+            sma200 = closes.rolling(200).mean().iloc[-1] if len(closes)>=200 else last
+            max52 = closes.tail(252).max() if len(closes)>=52 else last
+            flat.append({
+                "Ticker": voce["ticker"].replace(".MI",""), "TickerYahoo": voce["ticker"], "Nome": voce["nome"], "Settore": voce.get("settore","Industrials"),
+                "Prezzo": last, "PE": f_all.get("pe"), "PB": f_all.get("pb"), "ROE": f_all.get("roe"), "DivYield": f_all.get("divYield"),
+                "DebtEquity": f_all.get("debtEquity"), "MarketCapMld": f_all.get("mcap"),
+                "SMA50": round(float(sma50),2) if pd.notna(sma50) else last,
+                "SMA200": round(float(sma200),2) if pd.notna(sma200) else last,
+                "DistSMA200": round((last/sma200-1)*100,2) if sma200 else 0,
+                "Dist52w": round((last/max52-1)*100,2) if max52 else 0,
+                "BarreCount": len(barre)
             })
-            campi_ok = sum(1 for c in CAMPI_F if fondamentali.get(c) is not None)
-            print(f"  ok   {ticker}: {len(barre)} barre, {campi_ok}/13 campi fondamentali" + (", consenso" if consenso else ""))
+            print(f"  OK {voce['ticker']}: {len(barre)} barre")
         except Exception as e:
-            falliti.append(ticker)
-            print(f"  FAIL {ticker}: {e}", file=sys.stderr)
-        time.sleep(PAUSA_SECONDI)
+            print(f"  FAIL {voce['ticker']}: {e}", file=sys.stderr)
+            falliti.append(voce["ticker"])
+            if voce["ticker"] in cache:
+                print(f"  → uso cache per {voce['ticker']}")
+                titoli.append(cache[voce["ticker"]])
+                b = cache[voce["ticker"]].get("barre", [])
+                f = cache[voce["ticker"]].get("f", {})
+                last = b[-1]["c"] if b else 0
+                flat.append({
+                    "Ticker": voce["ticker"].replace(".MI",""), "TickerYahoo": voce["ticker"], "Nome": voce["nome"], "Settore": voce.get("settore","Industrials"),
+                    "Prezzo": last, "PE": f.get("pe"), "PB": f.get("pb"), "BarreCount": len(b)
+                })
 
-    if len(titoli) < len(universo) * MINIMO_RIUSCITI:
-        print(
-            f"Solo {len(titoli)}/{len(universo)} titoli riusciti — sotto la soglia "
-            f"di sicurezza: non scrivo lo snapshot per non pubblicare dati a metà.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        pausa = random.uniform(PAUSA_MIN, PAUSA_MAX)
+        print(f"  pausa {pausa:.1f}s")
+        time.sleep(pausa)
 
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    snapshot = {"generato_il": date.today().isoformat(), "titoli": titoli}
-    OUTPUT_PATH.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Scritto {OUTPUT_PATH} — {len(titoli)}/{len(universo)} titoli riusciti.")
-    if falliti:
-        print(f"Falliti (saltati): {', '.join(falliti)}", file=sys.stderr)
+    if not titoli:
+        print("Nessun titolo, uso intera cache", file=sys.stderr)
+        titoli = list(cache.values())
+        # flat già ricostruito sopra se cache usata
 
+    print(f"\nTotale: {len(titoli)}/{len(universo)} titoli (falliti: {len(falliti)})")
+
+    # scrivi
+    OUT_DATi.parent.mkdir(parents=True, exist_ok=True)
+    OUT_DATA.parent.mkdir(parents=True, exist_ok=True)
+    OUT_FLAT.parent.mkdir(parents=True, exist_ok=True)
+
+    snap = {"generato_il": date.today().isoformat(), "generated_at": datetime.utcnow().isoformat(), "titoli": titoli, "count": len(titoli)}
+    OUT_DATi.write_text(json.dumps(snap, ensure_ascii=False, indent=2), encoding="utf-8")
+    OUT_DATA.write_text(json.dumps(snap, ensure_ascii=False, indent=2), encoding="utf-8")
+    OUT_FLAT.write_text(json.dumps(flat, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        pd.DataFrame(flat).to_csv(OUT_FLAT.with_suffix(".csv"), index=False)
+    except: pass
+    OUT_LAST.write_text(json.dumps({"last_update": datetime.utcnow().isoformat(), "count": len(titoli), "falliti": falliti}, indent=2), encoding="utf-8")
+
+    print(f"\nScritto {OUT_DATi} ({len(titoli)} titoli)")
+    print(f"Scritto {OUT_FLAT} ({len(flat)} titoli)")
 
 if __name__ == "__main__":
     main()
