@@ -1,1 +1,91 @@
+name: Fetch Dati Borsa Italiana
 
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 17 * * 1-5'
+  push:
+    branches: [ main ]
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install deps
+        run: |
+          pip install -r requirements.txt 2>/dev/null || pip install -r github-screener-italia/requirements.txt 2>/dev/null || pip install yfinance==0.2.54 pandas==2.2.3 numpy==1.26.4 requests==2.32.3 curl-cffi==0.7.1
+          python -c "import yfinance; print('yfinance ok')"
+
+      - name: Run collector / fetcher_v4
+        run: |
+          set -x
+          # Prova prima fetcher_v4 che scrive sia in dati/ che in data/
+          python collector.py 2>&1 || python github-screener-italia/fetcher_v4_collector_based.py 2>&1 || python fetcher_v4_collector_based.py 2>&1 || true
+          # Fallback al vecchio fetcher.py se v4 fallisce
+          if [ ! -f dati/snapshot.json ] && [ ! -f github-screener-italia/dati/snapshot.json ]; then
+            echo "v4 non ha prodotto snapshot, provo fetcher.py"
+            python github-screener-italia/fetcher.py --no-fundamentals 2>&1 || python fetcher.py --no-fundamentals 2>&1 || true
+          fi
+          echo "--- files after run ---"
+          ls -lhR dati/ data/ github-screener-italia/dati/ github-screener-italia/data/ 2>/dev/null || true
+
+          # Normalizza: copia tutto in root dati/ e data/ così l'index.html trova sempre qualcosa
+          mkdir -p dati data
+          # Se v4 ha scritto in github-screener-italia/dati/
+          if [ -f github-screener-italia/dati/snapshot.json ]; then
+            cp github-screener-italia/dati/snapshot.json dati/snapshot.json
+            cp github-screener-italia/dati/snapshot.json data/snapshot.json
+            echo "Copiato github-screener-italia/dati/snapshot.json -> dati/ + data/"
+          fi
+          if [ -f github-screener-italia/data/italian_stocks.json ]; then
+            cp github-screener-italia/data/italian_stocks.json data/italian_stocks.json
+            cp github-screener-italia/data/italian_stocks.csv data/italian_stocks.csv 2>/dev/null || true
+          fi
+          # Se snapshot esiste in dati/, duplicalo anche in data/ (così basta usare solo /data)
+          if [ -f dati/snapshot.json ]; then
+            cp dati/snapshot.json data/snapshot.json 2>/dev/null || true
+            ls -lh dati/snapshot.json data/snapshot.json data/italian_stocks.json
+          fi
+          # Se esiste solo italian_stocks ma non snapshot, crea snapshot da flat (fallback)
+          if [ ! -f dati/snapshot.json ] && [ -f data/italian_stocks.json ]; then
+            echo "Creo dati/snapshot.json da data/italian_stocks.json"
+            python -c "
+import json, pathlib
+from datetime import date
+flat=json.loads(pathlib.Path('data/italian_stocks.json').read_text())
+titoli=[{'ticker':f.get('TickerYahoo') or f.get('Ticker')+'.MI','nome':f.get('Nome') or f.get('Ticker'),'settore':f.get('Settore') or 'Industrials','barre':[],'f':{'mcap':f.get('MarketCapMld'),'pe':f.get('PE'),'pb':f.get('PB'),'roe':f.get('ROE'),'divYield':f.get('DivYield'),'debtEquity':f.get('DebtEquity')},'con':f.get('Consenso')} for f in flat]
+json.dump({'generato_il':str(date.today()),'titoli':titoli}, open('dati/snapshot.json','w'), ensure_ascii=False, indent=2)
+print('Convertito', len(titoli))
+"
+          fi
+
+      - name: Commit & Push dati aggiornati
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dati/snapshot.json data/snapshot.json data/italian_stocks.json data/italian_stocks.csv universo.json 2>/dev/null || true
+          git add dati/ data/ -f
+          git status
+          git diff --staged --quiet && echo "Nessun cambiamento" && exit 0
+          git commit -m "Aggiornamento dati: $(date -u +'%Y-%m-%d %H:%M UTC') - snapshot + italian_stocks"
+          git pull --rebase origin main || git pull --rebase || true
+          git push || git push --force-with-lease || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: italian-stocks-data
+          path: |
+            data/
+            dati/
