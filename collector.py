@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 """
-collector.py - versione stabile che funzionava
-Ripristino della logica originale che hai detto funzionava, con anti-ban migliorato.
+collector.py - versione finale stabile anti-ban
+Usa curl_cffi direttamente su Yahoo chart API, bypassando yfinance per i prezzi.
+yfinance usato solo per info (con fallback statico da universo.json)
 
-Perché funziona meglio di fetcher.py v3:
-- Usa universo.json con fondamentali statici (CET1, mcap, ecc) così non dipende da Yahoo info
-- Usa yf.Ticker.history() con curl_cffi (meno rate limit di yf.download)
-- Se Yahoo ritorna storico vuoto, usa cache da dati/snapshot.json esistente
-- Non fallisce mai a metà: scrive sempre snapshot anche se solo 30% titoli nuovi
+Fix per gli errori visti:
+- 'str' object has no attribute 'name' -> yfinance+curl_cffi rotto in 0.2.54 e anche 0.2.40 su GH
+- 'Expecting value line 1 col 1' -> Yahoo blocca IP GH Actions se non usi curl_cffi
+Soluzione: non usare yf.Ticker per history, usa curl_cffi GET diretto a /v8/finance/chart/
 
 Output:
-  dati/snapshot.json (2.6M con barre OHLCV)
-  data/snapshot.json (copia)
-  data/italian_stocks.json (flat)
-  data/last_update.json
+  dati/snapshot.json (2.6M)
+  data/snapshot.json
+  data/italian_stocks.json
 """
 import json, time, sys, random
 from datetime import date, datetime
@@ -23,7 +22,7 @@ try:
     import yfinance as yf
     import pandas as pd
 except ImportError:
-    print("Installa yfinance pandas", file=sys.stderr)
+    print("Manca yfinance pandas", file=sys.stderr)
     sys.exit(1)
 
 try:
@@ -31,7 +30,7 @@ try:
     HAS_CFFI = True
 except:
     HAS_CFFI = False
-    print("⚠️ curl_cffi non trovato, continuo senza")
+    cffi_requests = None
 
 ROOT = Path.cwd()
 QUI = Path(__file__).parent
@@ -45,8 +44,6 @@ if not UNIVERSO.exists():
     UNIVERSO = ROOT / "universo.json"
 if not UNIVERSO.exists():
     UNIVERSO = QUI / "universo.json"
-if not UNIVERSO.exists():
-    UNIVERSO = Path("/mnt/data/universo.json")
 
 OUT_DATi = ROOT / "dati" / "snapshot.json"
 OUT_DATA = ROOT / "data" / "snapshot.json"
@@ -54,20 +51,17 @@ OUT_FLAT = ROOT / "data" / "italian_stocks.json"
 OUT_CSV = ROOT / "data" / "italian_stocks.csv"
 OUT_LAST = ROOT / "data" / "last_update.json"
 
-PAUSA_MIN = 6.0
-PAUSA_MAX = 12.0
+PAUSA_MIN = 3.0
+PAUSA_MAX = 6.0
 
-def get_session():
-    # yfinance 0.2.40 + curl_cffi funziona, 0.2.54 no -> usiamo 0.2.40
+def get_cffi_session():
     if HAS_CFFI:
         try:
             s = cffi_requests.Session(impersonate="chrome120")
-            print("✅ curl_cffi chrome120 attivo (bypass blocco Yahoo GitHub Actions)")
+            print("✅ curl_cffi chrome120 pronto")
             return s
         except Exception as e:
             print(f"curl_cffi fail: {e}")
-    else:
-        print("⚠️ curl_cffi non trovato, Yahoo potrebbe bloccare (Expecting value)")
     return None
 
 def leggi_barre(df):
@@ -116,67 +110,99 @@ def live_fondamentali(info):
         "payout": rnd(norm(info.get("payoutRatio")),2),
         "crescitaRic": rnd(norm(info.get("revenueGrowth")),2),
         "crescitaEps": rnd(norm(info.get("earningsGrowth")),2),
-        "fcfYield": None,
-        "cet1": None,
     }.items() if v is not None}
+
+def scarica_chart_cffi(ticker, session, period="2y"):
+    if not session:
+        raise RuntimeError("no cffi session")
+    range_map = {"2y": "2y", "1y": "1y", "6mo": "6mo", "3mo": "3mo"}
+    y_range = range_map.get(period, "2y")
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?range={y_range}&interval=1d&includePrePost=false&events=div%7Csplit"
+    try:
+        resp = session.get(url, timeout=20)
+        if resp.status_code != 200:
+            raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:200]}")
+        j = resp.json()
+        if "chart" not in j or j["chart"]["result"] is None:
+            raise RuntimeError(f"chart result null: {str(j)[:300]}")
+        result = j["chart"]["result"][0]
+        timestamps = result.get("timestamp")
+        if not timestamps:
+            raise RuntimeError("no timestamp")
+        quote = result["indicators"]["quote"][0]
+        df = pd.DataFrame({
+            "Open": quote.get("open"),
+            "High": quote.get("high"),
+            "Low": quote.get("low"),
+            "Close": quote.get("close"),
+            "Volume": quote.get("volume"),
+        })
+        df["Date"] = pd.to_datetime(timestamps, unit="s")
+        df = df.set_index("Date").sort_index()
+        df = df.dropna(subset=["Close"])
+        return df
+    except Exception as e:
+        raise RuntimeError(f"curl_cffi chart fail {ticker} {period}: {e}")
+
+def scarica_yfinance_fallback(ticker):
+    try:
+        tk = yf.Ticker(ticker)
+        hist = tk.history(period="2y", interval="1d", auto_adjust=True)
+        if hist.empty:
+            raise RuntimeError("yfinance history empty")
+        return hist
+    except Exception as e:
+        raise RuntimeError(f"yfinance fallback fail: {e}")
 
 def scarica(voce, session):
     ticker = voce["ticker"]
-    # prova con sessione curl_cffi prima, poi senza
-    sessions_to_try = [session, None] if session else [None]
-    for sess in sessions_to_try:
-        for period in ["2y", "1y", "6mo", "3mo"]:
-            for attempt in range(2):
-                try:
-                    tk = yf.Ticker(ticker, session=sess) if sess else yf.Ticker(ticker)
-                    hist = tk.history(period=period, interval="1d", auto_adjust=True)
-                    if hist.empty:
-                        raise RuntimeError(f"storico vuoto period={period}")
-                    barre = leggi_barre(hist)
-                    if len(barre) < 30:
-                        raise RuntimeError(f"solo {len(barre)} barre")
-                    info = {}
-                    try:
-                        info = tk.info or {}
-                    except:
-                        info = {}
-                    f_live = live_fondamentali(info)
-                    f_all = fondi(voce.get("f"), f_live)
-                    # consenso
-                    con = None
-                    tp = info.get("targetMeanPrice")
-                    if tp:
-                        lo = info.get("targetLowPrice") or tp
-                        hi = info.get("targetHighPrice") or tp
-                        n = info.get("numberOfAnalystOpinions") or 8
-                        con = {"tp": round(tp,2), "lo": round(lo,2), "hi": round(hi,2), "n": int(n), "b": 5, "h": 4, "s": 1}
-                    return barre, f_all, con
-                except Exception as e:
-                    err = str(e)
-                    if "Expecting value" in err:
-                        print(f"    Yahoo ha bloccato IP (Expecting value line 1 col 1) period={period} attempt={attempt+1}: {e}")
-                    else:
-                        print(f"    tentativo {period} {attempt+1} fallito: {e}")
-                    time.sleep(random.uniform(3,6))
-    raise RuntimeError("tutti i periodi falliti")
+    last_err = None
+    for period in ["2y", "1y", "6mo"]:
+        try:
+            if session:
+                hist = scarica_chart_cffi(ticker, session, period=period)
+            else:
+                hist = scarica_yfinance_fallback(ticker)
+            barre = leggi_barre(hist)
+            if len(barre) < 30:
+                raise RuntimeError(f"solo {len(barre)} barre")
+            info = {}
+            try:
+                tk = yf.Ticker(ticker)
+                info = tk.info or {}
+            except:
+                info = {}
+            f_all = fondi(voce.get("f"), live_fondamentali(info))
+            con = None
+            tp = info.get("targetMeanPrice")
+            if tp:
+                lo = info.get("targetLowPrice") or tp
+                hi = info.get("targetHighPrice") or tp
+                n = info.get("numberOfAnalystOpinions") or 8
+                con = {"tp": round(tp,2), "lo": round(lo,2), "hi": round(hi,2), "n": int(n), "b": 5, "h": 4, "s": 1}
+            return barre, f_all, con
+        except Exception as e:
+            last_err = e
+            print(f"    tentativo {period} fallito: {e}")
+            time.sleep(random.uniform(1,3))
+    raise RuntimeError(f"tutti i periodi falliti: {last_err}")
 
 def main():
     if not UNIVERSO.exists():
-        print(f"ERRORE: universo.json non trovato in {UNIVERSO}", file=sys.stderr)
+        print(f"ERRORE universo.json non trovato {UNIVERSO}", file=sys.stderr)
         sys.exit(1)
     universo = json.loads(UNIVERSO.read_text(encoding="utf-8"))
-    print(f"Universo caricato: {len(universo)} titoli da {UNIVERSO}")
+    print(f"Universo: {len(universo)} titoli da {UNIVERSO}")
 
-    session = get_session()
+    session = get_cffi_session()
 
-    # cache vecchia per fallback
     cache = {}
     if OUT_DATi.exists():
         try:
             old = json.loads(OUT_DATi.read_text())
             for t in old.get("titoli", []):
                 cache[t["ticker"]] = t
-            print(f"Cache trovata: {len(cache)} titoli in {OUT_DATi}")
+            print(f"Cache: {len(cache)} titoli")
         except Exception as e:
             print(f"Cache non leggibile: {e}")
 
@@ -209,7 +235,7 @@ def main():
             print(f"  FAIL {voce['ticker']}: {e}", file=sys.stderr)
             falliti.append(voce["ticker"])
             if voce["ticker"] in cache:
-                print(f"  → uso cache per {voce['ticker']}")
+                print(f"  → uso cache {voce['ticker']}")
                 titoli.append(cache[voce["ticker"]])
                 b = cache[voce["ticker"]].get("barre", [])
                 f = cache[voce["ticker"]].get("f", {})
@@ -223,14 +249,16 @@ def main():
         print(f"  pausa {pausa:.1f}s")
         time.sleep(pausa)
 
-    if not titoli:
-        print("Nessun titolo, uso intera cache", file=sys.stderr)
+    if not titoli and cache:
+        print("Uso intera cache", file=sys.stderr)
         titoli = list(cache.values())
-        # flat già ricostruito sopra se cache usata
 
-    print(f"\nTotale: {len(titoli)}/{len(universo)} titoli (falliti: {len(falliti)})")
+    if not titoli:
+        print("Nessun titolo, esco", file=sys.stderr)
+        sys.exit(1)
 
-    # scrivi
+    print(f"\nTotale: {len(titoli)}/{len(universo)}")
+
     OUT_DATi.parent.mkdir(parents=True, exist_ok=True)
     OUT_DATA.parent.mkdir(parents=True, exist_ok=True)
     OUT_FLAT.parent.mkdir(parents=True, exist_ok=True)
@@ -243,9 +271,7 @@ def main():
         pd.DataFrame(flat).to_csv(OUT_FLAT.with_suffix(".csv"), index=False)
     except: pass
     OUT_LAST.write_text(json.dumps({"last_update": datetime.utcnow().isoformat(), "count": len(titoli), "falliti": falliti}, indent=2), encoding="utf-8")
-
     print(f"\nScritto {OUT_DATi} ({len(titoli)} titoli)")
-    print(f"Scritto {OUT_FLAT} ({len(flat)} titoli)")
 
 if __name__ == "__main__":
     main()
