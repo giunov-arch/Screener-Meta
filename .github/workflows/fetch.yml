@@ -27,9 +27,9 @@ jobs:
           pip install yfinance==0.2.40 pandas==2.2.3 numpy==1.26.4 requests curl-cffi==0.7.1
 
       - name: Run collector finale (bypass diretto Yahoo chart API)
+        env:
+          YAHOO_PROXY_URL: ${{ secrets.YAHOO_PROXY_URL }}
         run: |
-          env:
-            YAHOO_PROXY_URL: ${{ secrets.YAHOO_PROXY_URL }}
           python collector.py
           ls -lh dati/ data/ 2>/dev/null || true
 
