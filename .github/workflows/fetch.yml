@@ -28,6 +28,8 @@ jobs:
 
       - name: Run collector finale (bypass diretto Yahoo chart API)
         run: |
+          env:
+            YAHOO_PROXY_URL: ${{ secrets.YAHOO_PROXY_URL }}
           python collector.py
           ls -lh dati/ data/ 2>/dev/null || true
 
