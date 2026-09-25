@@ -188,13 +188,78 @@ def fetch_fondamentali_yahoo(ticker, session):
     
     return merged
 
+
+def fetch_consenso_yfinance_fallback(ticker):
+    """
+    Fallback con yfinance per TP quando curl_cffi non trova targetMeanPrice
+    Per titoli .MI Yahoo spesso non da TP in financialData ma yfinance info lo ha
+    """
+    try:
+        import yfinance as yf
+        stock = yf.Ticker(ticker)
+        info = stock.info
+        if not info:
+            return None
+        
+        tp = info.get("targetMeanPrice") or info.get("targetMedianPrice")
+        lo = info.get("targetLowPrice")
+        hi = info.get("targetHighPrice")
+        n_analysts = info.get("numberOfAnalystOpinions")
+        rec_key = info.get("recommendationKey") or ""
+        rec_mean = info.get("recommendationMean")
+        
+        if tp:
+            b = h = s = 0
+            strongBuy = buy = hold = sell = strongSell = 0
+            rating = "Hold"
+            if rec_key:
+                rk = rec_key.lower()
+                if rk in ["strong_buy", "buy"]:
+                    rating = "Buy"
+                    b = 8; h = 2; s = 1
+                elif rk in ["sell", "strong_sell", "underperform"]:
+                    rating = "Sell"
+                    b = 1; h = 3; s = 6
+                else:
+                    rating = "Hold"
+                    b = 3; h = 5; s = 2
+            else:
+                if rec_mean is not None:
+                    if rec_mean < 2.5:
+                        rating = "Buy"
+                    elif rec_mean > 3.5:
+                        rating = "Sell"
+            
+            print(f"    yfinance fallback TP OK per {ticker}: {tp} (n={n_analysts})")
+            return {
+                "tp": round(float(tp), 2),
+                "lo": round(float(lo), 2) if lo else round(float(tp)*0.85, 2),
+                "hi": round(float(hi), 2) if hi else round(float(tp)*1.15, 2),
+                "n": int(n_analysts) if n_analysts else 8,
+                "n_target": int(n_analysts) if n_analysts else None,
+                "b": int(b),
+                "h": int(h),
+                "s": int(s),
+                "strongBuy": int(strongBuy),
+                "buy": int(buy),
+                "hold": int(hold),
+                "sell": int(sell),
+                "strongSell": int(strongSell),
+                "rating": rating,
+                "rec_mean": round(float(rec_mean), 2) if rec_mean else None,
+                "upside": None,
+                "fonte": "yfinance"
+            }
+    except Exception as e:
+        print(f"    yfinance fallback fail {ticker}: {e}")
+    return None
+
 def fetch_consenso_yahoo(ticker, session):
     """
     Scarica giudizio analisti e target price REALI da Yahoo
-    Moduli: financialData (targetMeanPrice, recommendation) + recommendationTrend (buy/hold/sell)
-    Ritorna dict formato collector.py: {tp, lo, hi, n, b, h, s, rating, upside}
+    Fallback: yfinance info per TP se curl_cffi non lo trova (comune per .MI)
     """
-    consenso = {}
+    consenso_cffi = None
     try:
         modules = "financialData,recommendationTrend"
         url = f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules={modules}&corsDomain=finance.yahoo.com&formatted=false"
@@ -205,18 +270,17 @@ def fetch_consenso_yahoo(ticker, session):
             resp = session.get(url2, timeout=20)
         if resp.status_code != 200:
             print(f"    HTTP {resp.status_code} consenso {ticker}")
-            return None
+            raise RuntimeError(f"HTTP {resp.status_code}")
         
         j = resp.json()
         result = j.get("quoteSummary", {}).get("result")
         if not result:
-            return None
+            raise RuntimeError("result null")
         result = result[0]
         
         fin = result.get("financialData", {})
         rec = result.get("recommendationTrend", {}).get("trend", [])
         
-        # Target price
         tp = fin.get("targetMeanPrice", {}).get("raw")
         lo = fin.get("targetLowPrice", {}).get("raw")
         hi = fin.get("targetHighPrice", {}).get("raw")
@@ -224,51 +288,34 @@ def fetch_consenso_yahoo(ticker, session):
         rec_mean = fin.get("recommendationMean", {}).get("raw")
         rec_key = fin.get("recommendationKey", "")
         
-        # Recommendation trend - Yahoo Finance website usa il mese corrente (0m), non l'ultimo
-        # trend è ordinato: [0m (corrente), -1m, -2m, -3m, -4m] -> prendiamo rec[0]
         b = h = s = 0
         strongBuy = buy = hold = sell = strongSell = 0
         if rec and len(rec) > 0:
-            # Trova il periodo 0m se esiste, altrimenti prendi il primo
             current = None
             for period in rec:
                 if period.get("period") == "0m":
                     current = period
                     break
             if not current:
-                current = rec[0]  # fallback al più recente
-            
-            # Yahoo API ha: strongBuy, buy, hold, sell, strongSell
-            # Alcune versioni usano underperform al posto di sell
+                current = rec[0]
             strongBuy = current.get("strongBuy", 0)
             buy = current.get("buy", 0)
             hold = current.get("hold", 0)
             sell = current.get("sell", 0) + current.get("underperform", 0)
             strongSell = current.get("strongSell", 0)
-            
-            # Mappatura esatta come Yahoo Finance website:
-            # Buy = strongBuy + buy, Hold = hold, Sell = sell + strongSell + underperform
             b = strongBuy + buy
             h = hold
             s = sell + strongSell
         
-        # Rating esatto come Yahoo: basato su recommendationMean (1-5 scale)
-        # 1-1.5 Strong Buy, 1.5-2.5 Buy, 2.5-3.5 Hold, 3.5-4.5 Underperform, 4.5-5 Sell
         rating = "Hold"
         if rec_key:
             rk = rec_key.lower()
-            if rk in ["strong_buy"]:
-                rating = "Buy"
-            elif rk in ["buy"]:
+            if rk in ["strong_buy", "buy"]:
                 rating = "Buy"
             elif rk in ["strong_sell", "sell"]:
                 rating = "Sell"
             elif "underperform" in rk:
                 rating = "Sell"
-            else:
-                rating = "Hold"
-        
-        # Se abbiamo recommendationMean, usalo per rating più preciso
         if rec_mean is not None:
             if rec_mean < 1.5:
                 rating = "Buy"
@@ -278,28 +325,22 @@ def fetch_consenso_yahoo(ticker, session):
                 rating = "Hold"
             else:
                 rating = "Sell"
-        
-        # Fallback su conteggi se non abbiamo rec_key/rec_mean
         if rating == "Hold" and (b+h+s) > 0:
             if b > h and b > s:
                 rating = "Buy"
             elif s > b and s > h:
                 rating = "Sell"
         
-        # n per target price e n per recommendations sono diversi su Yahoo
-        # Yahoo website mostra: per Target Price usa numberOfAnalystOpinions
-        # per Recommendations usa somma di buy/hold/sell del mese corrente
         n_recommendations = b + h + s
         n_target = int(n_analysts) if n_analysts else 0
         
-        # Se abbiamo almeno uno dei due, ritorna
         if tp or n_recommendations > 0:
-            consenso = {
+            consenso_cffi = {
                 "tp": round(tp, 2) if tp else None,
                 "lo": round(lo, 2) if lo else (round(tp*0.85, 2) if tp else None),
                 "hi": round(hi, 2) if hi else (round(tp*1.15, 2) if tp else None),
-                "n": int(n_recommendations if n_recommendations > 0 else n_target if n_target > 0 else 8),  # numero analisti per breakdown (come Yahoo website)
-                "n_target": int(n_target) if n_target else None,  # numero analisti per target price
+                "n": int(n_recommendations if n_recommendations > 0 else n_target if n_target > 0 else 8),
+                "n_target": int(n_target) if n_target else None,
                 "b": int(b),
                 "h": int(h),
                 "s": int(s),
@@ -310,14 +351,36 @@ def fetch_consenso_yahoo(ticker, session):
                 "strongSell": int(strongSell),
                 "rating": rating,
                 "rec_mean": round(rec_mean, 2) if rec_mean else None,
-                "upside": None
+                "upside": None,
+                "fonte": "curl_cffi"
             }
-            return consenso
-            
+            if tp:
+                return consenso_cffi
+            print(f"    cffi senza TP per {ticker} (solo rating {rating} {b}/{h}/{s}), provo yfinance fallback...")
+            yf_con = fetch_consenso_yfinance_fallback(ticker)
+            if yf_con and yf_con.get("tp"):
+                yf_con["b"] = b if b else yf_con["b"]
+                yf_con["h"] = h if h else yf_con["h"]
+                yf_con["s"] = s if s else yf_con["s"]
+                yf_con["strongBuy"] = strongBuy
+                yf_con["buy"] = buy
+                yf_con["hold"] = hold
+                yf_con["sell"] = sell
+                yf_con["strongSell"] = strongSell
+                yf_con["n"] = n_recommendations if n_recommendations else yf_con["n"]
+                print(f"    Merge OK {ticker}: TP yfinance {yf_con['tp']} + breakdown cffi {b}/{h}/{s}")
+                return yf_con
+            else:
+                return consenso_cffi
     except Exception as e:
-        print(f"    errore consenso {ticker}: {e}")
+        print(f"    errore consenso cffi {ticker}: {e}, provo yfinance fallback...")
     
-    return None
+    yf_con = fetch_consenso_yfinance_fallback(ticker)
+    if yf_con:
+        return yf_con
+    
+    return consenso_cffi
+
 
 def df_to_barre(df):
     barre = []
