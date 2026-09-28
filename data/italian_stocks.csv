@@ -1,33 +1,33 @@
 Ticker,TickerYahoo,Nome,Settore,Prezzo,PE,PB,ROE,DivYield,DebtEquity,MarketCapMld,CET1,SMA50,SMA200,DistSMA200,Dist52w,BarreCount,TargetPrice,TargetLow,TargetHigh,NumAnalisti,Buy,Hold,Sell,Rating,Upside,FonteFondamentali,FonteConsenso
-ENI,ENI.MI,Eni,Energy,24.09,8.2,0.85,11.5,6.5,0.42,47.5,,23.51,21.32,12.99,-3.19,506,,,,,,,,,,universo.json,fallback
-ENEL,ENEL.MI,Enel,Utilities,8.913,11.5,1.75,14.8,5.8,1.25,68.0,,9.43,9.52,-6.39,-13.3,506,,,,,,,,,,universo.json,fallback
-ISP,ISP.MI,Intesa Sanpaolo,Banche,6.788,7.8,0.95,13.2,7.2,,62.0,13.8,6.71,6.0,13.14,-1.86,506,,,,,,,,,,universo.json,fallback
-UCG,UCG.MI,UniCredit,Banche,83.95,6.9,0.72,14.5,6.8,,58.0,16.1,83.46,74.44,12.77,-2.55,506,,,,,,,,,,universo.json,fallback
-G,G.MI,Generali,Assicurazioni,43.72,9.5,1.1,11.0,5.5,,32.0,,44.11,38.87,12.48,-5.35,506,,,,,,,,,,universo.json,fallback
-RACE,RACE.MI,Ferrari,Auto Luxury,357.05,42.0,14.5,38.0,0.7,0.55,70.0,,351.69,315.69,13.1,-16.36,506,,,,,,,,,,universo.json,fallback
-LDO,LDO.MI,Leonardo,Difesa,48.975,14.2,1.4,9.5,1.8,0.65,12.5,,53.48,54.3,-9.81,-23.79,506,,,,,,,,,,universo.json,fallback
-PRY,PRY.MI,Prysmian,Industriali,122.4,18.0,3.2,18.0,2.5,0.75,14.0,,123.63,118.39,3.38,-21.99,506,,,,,,,,,,universo.json,fallback
-SRG,SRG.MI,Snam,Utilities,5.588,13.5,1.5,11.0,5.2,1.1,15.0,,5.78,6.12,-8.7,-17.92,506,,,,,,,,,,universo.json,fallback
-TRN,TRN.MI,Terna,Utilities,9.174,18.5,2.8,15.5,4.2,1.3,14.5,,9.73,9.77,-6.08,-11.66,506,,,,,,,,,,universo.json,fallback
-PST,PST.MI,Poste Italiane,Servizi,25.82,9.8,1.3,13.5,6.0,,14.0,,26.77,24.42,5.75,-11.67,506,,,,,,,,,,universo.json,fallback
-MB,MB.MI,Mediobanca,Banche,29.05,8.5,0.85,11.5,6.2,,11.0,15.2,28.2,22.02,31.95,0.0,506,,,,,,,,,,universo.json,fallback
-NEXI,NEXI.MI,Nexi,Tecnologia,4.167,22.0,0.8,3.5,0.0,1.4,6.5,,4.21,3.73,11.65,-16.83,506,,,,,,,,,,universo.json,fallback
-CPR,CPR.MI,Campari,Consumer,5.968,28.0,4.5,15.0,1.0,0.6,9.5,,5.86,5.9,1.08,-11.43,506,,,,,,,,,,universo.json,fallback
-BC,BC.MI,Brunello Cucinelli,Lusso,80.8,52.0,10.5,20.0,0.8,0.3,5.8,,84.52,84.0,-3.81,-20.9,506,,,,,,,,,,universo.json,fallback
-MONC,MONC.MI,Moncler,Lusso,43.56,24.0,5.5,24.0,1.5,0.1,14.5,,47.27,51.46,-15.35,-25.61,506,,,,,,,,,,universo.json,fallback
-AMP,AMP.MI,Amplifon,Healthcare,11.425,26.0,4.2,16.5,0.9,0.7,5.2,,11.75,11.45,-0.25,-27.32,506,,,,,,,,,,universo.json,fallback
-BZU,BZU.MI,Buzzi Unicem,Materiali,37.18,9.0,0.9,10.5,3.8,0.2,5.5,,40.17,45.36,-18.03,-31.78,506,,,,,,,,,,universo.json,fallback
-IP,IP.MI,Interpump,Industriali,35.5,18.5,3.0,16.0,1.2,0.4,4.2,,36.06,38.13,-6.89,-30.39,506,,,,,,,,,,universo.json,fallback
-AZM,AZM.MI,Azimut,Asset Management,38.88,11.0,2.5,22.0,5.5,0.1,3.0,,38.03,36.07,7.79,-2.75,506,,,,,,,,,,universo.json,fallback
-SPM,SPM.MI,Saipem,Energy,4.349,18.0,1.2,6.5,0.0,0.8,4.5,,4.36,3.87,12.41,-9.79,506,,,,,,,,,,universo.json,fallback
-TEN,TEN.MI,Tenaris,Energy,24.42,6.5,0.85,13.5,6.5,0.05,14.0,,24.07,23.28,4.88,-11.81,506,,,,,,,,,,universo.json,fallback
-TIT,TIT.MI,Telecom Italia,TLC,7.241,,0.4,-2.0,0.0,1.8,4.8,,7.58,6.79,6.57,-11.03,506,,,,,,,,,,universo.json,fallback
-BPE,BPE.MI,BPER Banca,Banche,14.346,6.2,0.55,10.5,7.5,,6.2,14.5,14.22,12.67,13.26,-3.29,506,,,,,,,,,,universo.json,fallback
-BMPS,BMPS.MI,MPS,Banche,11.966,5.8,0.48,9.5,5.0,,5.5,18.2,11.7,9.68,23.59,-0.58,506,,,,,,,,,,universo.json,fallback
-BAMI,BAMI.MI,Banco BPM,Banche,16.4,5.5,0.58,12.5,8.0,,8.8,14.2,16.22,13.86,18.34,-4.54,506,,,,,,,,,,universo.json,fallback
-REC,REC.MI,Recordati,Healthcare,53.05,21.0,4.2,20.5,2.2,0.55,10.5,,52.3,49.87,6.38,-1.85,506,,,,,,,,,,universo.json,fallback
-DIA,DIA.MI,Diasorin,Healthcare,78.8,24.0,2.2,9.0,1.2,0.65,4.8,,74.11,68.95,14.29,-0.43,506,,,,,,,,,,universo.json,fallback
-IG,IG.MI,Italgas,Utilities,8.35,12.0,1.6,13.5,5.5,0.95,4.5,,8.83,9.86,-15.33,-25.31,506,,,,,,,,,,universo.json,fallback
-HER,HER.MI,Hera,Utilities,3.554,13.5,1.2,9.0,4.8,0.85,4.8,,3.77,3.95,-9.97,-19.7,506,,,,,,,,,,universo.json,fallback
-ERG,ERG.MI,ERG,Utilities,22.66,16.0,1.8,11.5,4.0,0.75,3.2,,22.22,22.62,0.15,-9.14,506,,,,,,,,,,universo.json,fallback
-A2A,A2A.MI,A2A,Utilities,2.291,11.5,1.1,10.0,5.2,0.9,5.5,,2.31,2.35,-2.68,-15.9,506,,,,,,,,,,universo.json,fallback
+ENI,ENI.MI,Eni,Energy,24.58,8.2,0.85,11.5,6.5,0.42,47.5,,23.57,21.36,15.05,-1.23,504,,,,,,,,,,universo.json,fallback
+ENEL,ENEL.MI,Enel,Utilities,8.713,11.5,1.75,14.8,5.8,1.25,68.0,,9.41,9.52,-8.5,-15.24,504,,,,,,,,,,universo.json,fallback
+ISP,ISP.MI,Intesa Sanpaolo,Banche,6.762,7.8,0.95,13.2,7.2,,62.0,13.8,6.71,6.01,12.6,-2.24,504,,,,,,,,,,universo.json,fallback
+UCG,UCG.MI,UniCredit,Banche,84.28,6.9,0.72,14.5,6.8,,58.0,16.1,83.52,74.53,13.08,-2.17,504,,,,,,,,,,universo.json,fallback
+G,G.MI,Generali,Assicurazioni,43.07,9.5,1.1,11.0,5.5,,32.0,,44.12,38.91,10.69,-6.75,504,,,,,,,,,,universo.json,fallback
+RACE,RACE.MI,Ferrari,Auto Luxury,347.95,42.0,14.5,38.0,0.7,0.55,70.0,,352.11,315.88,10.15,-18.49,504,,,,,,,,,,universo.json,fallback
+LDO,LDO.MI,Leonardo,Difesa,49.225,14.2,1.4,9.5,1.8,0.65,12.5,,53.47,54.3,-9.35,-23.4,504,,,,,,,,,,universo.json,fallback
+PRY,PRY.MI,Prysmian,Industriali,122.55,18.0,3.2,18.0,2.5,0.75,14.0,,123.58,118.57,3.35,-21.89,504,,,,,,,,,,universo.json,fallback
+SRG,SRG.MI,Snam,Utilities,5.592,13.5,1.5,11.0,5.2,1.1,15.0,,5.77,6.12,-8.63,-17.86,504,,,,,,,,,,universo.json,fallback
+TRN,TRN.MI,Terna,Utilities,9.18,18.5,2.8,15.5,4.2,1.3,14.5,,9.7,9.77,-6.04,-11.6,504,,,,,,,,,,universo.json,fallback
+PST,PST.MI,Poste Italiane,Servizi,25.88,9.8,1.3,13.5,6.0,,14.0,,26.73,24.44,5.88,-11.46,504,,,,,,,,,,universo.json,fallback
+MB,MB.MI,Mediobanca,Banche,28.98,8.5,0.85,11.5,6.2,,11.0,15.2,28.24,22.08,31.26,-0.24,504,,,,,,,,,,universo.json,fallback
+NEXI,NEXI.MI,Nexi,Tecnologia,4.175,22.0,0.8,3.5,0.0,1.4,6.5,,4.21,3.73,11.85,-16.67,504,,,,,,,,,,universo.json,fallback
+CPR,CPR.MI,Campari,Consumer,5.924,28.0,4.5,15.0,1.0,0.6,9.5,,5.86,5.91,0.32,-12.08,504,,,,,,,,,,universo.json,fallback
+BC,BC.MI,Brunello Cucinelli,Lusso,82.4,52.0,10.5,20.0,0.8,0.3,5.8,,84.51,83.94,-1.84,-19.33,504,,,,,,,,,,universo.json,fallback
+MONC,MONC.MI,Moncler,Lusso,44.7,24.0,5.5,24.0,1.5,0.1,14.5,,47.12,51.4,-13.04,-23.67,504,,,,,,,,,,universo.json,fallback
+AMP,AMP.MI,Amplifon,Healthcare,12.12,26.0,4.2,16.5,0.9,0.7,5.2,,11.77,11.45,5.87,-22.9,504,,,,,,,,,,universo.json,fallback
+BZU,BZU.MI,Buzzi Unicem,Materiali,37.48,9.0,0.9,10.5,3.8,0.2,5.5,,40.08,45.29,-17.24,-31.23,504,,,,,,,,,,universo.json,fallback
+IP,IP.MI,Interpump,Industriali,35.52,18.5,3.0,16.0,1.2,0.4,4.2,,36.07,38.08,-6.73,-30.35,504,,,,,,,,,,universo.json,fallback
+AZM,AZM.MI,Azimut,Asset Management,39.17,11.0,2.5,22.0,5.5,0.1,3.0,,38.1,36.09,8.55,-2.03,504,,,,,,,,,,universo.json,fallback
+SPM,SPM.MI,Saipem,Energy,4.42,18.0,1.2,6.5,0.0,0.8,4.5,,4.37,3.88,13.95,-8.32,504,,,,,,,,,,universo.json,fallback
+TEN,TEN.MI,Tenaris,Energy,24.8,6.5,0.85,13.5,6.5,0.05,14.0,,24.07,23.32,6.34,-10.44,504,,,,,,,,,,universo.json,fallback
+TIT,TIT.MI,Telecom Italia,TLC,7.116,,0.4,-2.0,0.0,1.8,4.8,,7.57,6.81,4.56,-12.57,504,,,,,,,,,,universo.json,fallback
+BPE,BPE.MI,BPER Banca,Banche,14.26,6.2,0.55,10.5,7.5,,6.2,14.5,14.24,12.68,12.43,-3.87,504,,,,,,,,,,universo.json,fallback
+BMPS,BMPS.MI,MPS,Banche,11.958,5.8,0.48,9.5,5.0,,5.5,18.2,11.72,9.7,23.25,-0.65,504,,,,,,,,,,universo.json,fallback
+BAMI,BAMI.MI,Banco BPM,Banche,16.39,5.5,0.58,12.5,8.0,,8.8,14.2,16.24,13.88,18.09,-4.6,504,,,,,,,,,,universo.json,fallback
+REC,REC.MI,Recordati,Healthcare,53.15,21.0,4.2,20.5,2.2,0.55,10.5,,52.34,49.9,6.52,-1.67,504,,,,,,,,,,universo.json,fallback
+DIA,DIA.MI,Diasorin,Healthcare,79.28,24.0,2.2,9.0,1.2,0.65,4.8,,74.29,69.04,14.83,0.0,504,,,,,,,,,,universo.json,fallback
+IG,IG.MI,Italgas,Utilities,8.294,12.0,1.6,13.5,5.5,0.95,4.5,,8.79,9.86,-15.86,-25.81,504,,,,,,,,,,universo.json,fallback
+HER,HER.MI,Hera,Utilities,3.52,13.5,1.2,9.0,4.8,0.85,4.8,,3.77,3.95,-10.79,-20.47,504,,,,,,,,,,universo.json,fallback
+ERG,ERG.MI,ERG,Utilities,22.22,16.0,1.8,11.5,4.0,0.75,3.2,,22.21,22.63,-1.81,-10.91,504,,,,,,,,,,universo.json,fallback
+A2A,A2A.MI,A2A,Utilities,2.261,11.5,1.1,10.0,5.2,0.9,5.5,,2.31,2.35,-3.95,-17.0,504,,,,,,,,,,universo.json,fallback
