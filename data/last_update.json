@@ -1,5 +1,5 @@
 {
-  "last_update": "2026-11-17T23:47:55.079841",
+  "last_update": "2026-11-18T23:22:34.413281",
   "count": 32,
   "falliti": [
     "STM.MI",
@@ -10,6 +10,7 @@
     "STLA.MI",
     "DNLM.MI",
     "ITL.MI",
+    "A2A.MI",
     "HOV.MI",
     "CS.MI"
   ]
